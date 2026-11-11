@@ -127,7 +127,7 @@
           <input type="text" id="student-name" placeholder="例：山田 太郎" class="bg-transparent text-sm font-bold text-slate-800 outline-none w-28 sm:w-32" onchange="autoSubmitScore()">
         </div>
 
-        <!-- シート連携ボタンは非表示（先生のURLを埋め込み済みのため自動送信されます） -->
+        <!-- シート連携ボタンは非表示（先生のURL埋め込み済み） -->
         <button id="sheet-config-btn" onclick="openSheetConfig()" class="hidden"></button>
 
         <button onclick="openScoreList()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5">
@@ -719,22 +719,27 @@
         const ans = r1 * mult;
         return { questionHTML: `${r1} : ${r2} = x : ${r2 * mult}`, answerHTML: `x = ${ans}`, answerRaw: `${ans}` };
       } else if (step === 6) {
-        // 文章題パターン（確実な逆算と数値出力）
+        // 文章題パターン（年齢算・過不足算・買い物・速さ）
         const patterns = [
-          // 1. 代金と個数（つるかめ算タイプ）
-          () => { 
-            const x = randInt(3, 8); 
-            const total = randInt(10, 16); 
-            const aP = pick([120, 150, 180]); 
-            const oP = pick([70, 80, 90]); 
-            const totalPay = aP * x + oP * (total - x);
-            return { 
-              questionHTML: `1個 ${aP} 円のりんごと1個 ${oP} 円のみかんを合わせて ${total} 個買い、代金の合計は ${totalPay} 円でした。りんごは何個買いましたか。`, 
-              answerHTML: `${x} 個`, 
-              answerRaw: `${x}`,
-              hint: `りんごを x 個とすると、みかんは (${total} - x) 個と表せます。${aP}x + ${oP}(${total} - x) = ${totalPay} の方程式を解きます。`
-            }; 
+          // 1. 年齢問題（親と子：何年後に親の年齢が子の何倍になるか）
+          () => {
+            const childAge = randInt(11, 14); // 子の現在の年齢（中学生）
+            const xYears = randInt(3, 10);     // 求める年数 x
+            const multiple = pick([2, 3]);     // 何倍になるか（2倍または3倍）
+            
+            // x年後に parentAge + x = multiple * (childAge + x)
+            // parentAge = multiple * (childAge + x) - x
+            const parentAge = multiple * (childAge + xYears) - xYears;
+            const parentRole = pick(["母", "父"]);
+
+            return {
+              questionHTML: `現在、${parentRole}の年齢は ${parentAge} 歳、子どもの年齢は ${childAge} 歳です。${parentRole}の年齢が子どもの年齢の ${multiple} 倍になるのは何年後ですか。`,
+              answerHTML: `${xYears} 年後`,
+              answerRaw: `${xYears}`,
+              hint: `x 年後とすると、${parentRole}の年齢は (${parentAge} + x) 歳、子どもの年齢は (${childAge} + x) 歳になります。${parentAge} + x = ${multiple}(${childAge} + x) を解きます。`
+            };
           },
+
           // 2. 過不足算（アメ・ノート・画用紙などの配布）
           () => { 
             const x = randInt(6, 15); // 人数
@@ -754,7 +759,23 @@
               hint: `子どもの人数を x 人とすると、${item}の総数は ${p1}x + ${extra} と表せます。また、1人 ${p2} ${unit}配るときの総数は ${p2}x - ${shortage} と表せるので、${p1}x + ${extra} = ${p2}x - ${shortage} を解きます。` 
             }; 
           },
-          // 3. 速さ・追いつき問題
+
+          // 3. 代金と個数（買い物問題）
+          () => { 
+            const x = randInt(3, 8); 
+            const total = randInt(10, 16); 
+            const aP = pick([120, 150, 180]); 
+            const oP = pick([70, 80, 90]); 
+            const totalPay = aP * x + oP * (total - x);
+            return { 
+              questionHTML: `1個 ${aP} 円のりんごと1個 ${oP} 円のみかんを合わせて ${total} 個買い、代金の合計は ${totalPay} 円でした。りんごは何個買いましたか。`, 
+              answerHTML: `${x} 個`, 
+              answerRaw: `${x}`,
+              hint: `りんごを x 個とすると、みかんは (${total} - x) 個と表せます。${aP}x + ${oP}(${total} - x) = ${totalPay} の方程式を解きます。`
+            }; 
+          },
+
+          // 4. 速さ・追いつき問題
           () => { 
             const ans = randInt(6, 16); // 追いつくまでの時間（分）
             const v1 = pick([50, 60, 70]); // 弟の分速
@@ -870,10 +891,14 @@
       const ansNumMatch = ansVal.match(/^-?\d+/);
       const ansNumOnly = ansNumMatch ? ansNumMatch[0] : null;
 
+      // ユーザー入力からも数字のみを取り出せるように（例：「5年後」や「5人」と入力しても正解判定）
+      const userNumMatch = userVal.match(/^-?\d+/);
+      const userNumOnly = userNumMatch ? userNumMatch[0] : null;
+
       let isCorrect = false;
       if (userVal === ansVal) isCorrect = true;
       if (!isCorrect && userVal === ansVal.replace(/^x=/, '')) isCorrect = true;
-      if (!isCorrect && ansNumOnly && userVal === ansNumOnly) isCorrect = true;
+      if (!isCorrect && ansNumOnly && (userVal === ansNumOnly || userNumOnly === ansNumOnly)) isCorrect = true;
       if (!isCorrect && currentInputMode === 'fraction') {
          if (userVal.replace(/[()]/g, "") === ansVal.replace(/[()]/g, "")) isCorrect = true;
       }
