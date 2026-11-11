@@ -482,7 +482,7 @@
 
       if (t === 'int') {
         const val = randInt(-9, 9);
-        return { val: val, html: `${val < 0 ? `(${val})` : val}`, raw: `${val}`, isNeg: val < 0 };
+        return { type: 'int', val: val, num: val, den: 1, html: `${val < 0 ? `(${val})` : val}`, raw: `${val}`, isNeg: val < 0 };
       } else if (t === 'frac') {
         const den = pick([2, 3, 4, 5]);
         let num;
@@ -490,13 +490,78 @@
         const fracStr = makeFracHTML(Math.abs(num), den);
         const html = num < 0 ? `(-${fracStr})` : fracStr;
         const raw = `${num}/${den}`;
-        return { val: num / den, html: html, raw: raw, isFrac: true, num, den, isNeg: num < 0 };
+        return { type: 'frac', val: num / den, num: num, den: den, html: html, raw: raw, isFrac: true, isNeg: num < 0 };
       } else {
         const decVal = randInt(-9, 9) * 0.5; // -4.5 ~ 4.5
         if (decVal === 0) return createTerm(true, fracAllowed, false);
+        // 小数を正確な有理数(num/den)に変換 (0.5刻みなので分母は2)
+        const num = Math.round(decVal * 2);
+        const den = 2;
         const html = decVal < 0 ? `(${decVal})` : `${decVal}`;
-        return { val: decVal, html: html, raw: `${decVal}`, isNeg: decVal < 0 };
+        return { type: 'dec', val: decVal, num: num, den: den, html: html, raw: `${decVal}`, isNeg: decVal < 0 };
       }
+    }
+
+    // 分数・小数の演算を正確に行い、HTMLとRaw文字列を返すヘルパー
+    function calculateTermResult(t1, t2, op) {
+      // どちらかに分数が含まれる場合、または割り算で割り切れない場合は分数として解く
+      const hasFrac = (t1.type === 'frac' || t2.type === 'frac');
+      
+      let resNum, resDen;
+      if (op === '+') {
+        resNum = t1.num * t2.den + t2.num * t1.den;
+        resDen = t1.den * t2.den;
+      } else if (op === '-') {
+        resNum = t1.num * t2.den - t2.num * t1.den;
+        resDen = t1.den * t2.den;
+      } else if (op === '*') {
+        resNum = t1.num * t2.num;
+        resDen = t1.den * t2.den;
+      } else if (op === '/') {
+        if (t2.num === 0) { t2.num = 1; }
+        resNum = t1.num * t2.den;
+        resDen = t1.den * t2.num;
+      }
+
+      // 負の符号を分子に寄せる
+      if (resDen < 0) {
+        resNum = -resNum;
+        resDen = -resDen;
+      }
+
+      // 約分
+      const g = gcd(resNum, resDen);
+      resNum = resNum / g;
+      resDen = resDen / g;
+
+      // 整数になる場合
+      if (resDen === 1) {
+        return { html: `${resNum}`, raw: `${resNum}` };
+      }
+
+      // 分数が絡んでいる場合は必ず分数で表示
+      if (hasFrac) {
+        const sign = resNum < 0 ? "-" : "";
+        const absNum = Math.abs(resNum);
+        return {
+          html: `${sign}${makeFracHTML(absNum, resDen)}`,
+          raw: `${resNum}/${resDen}`
+        };
+      }
+
+      // 両方とも小数、または整数と小数の場合
+      // 10進数で割り切れる分母 (2, 4, 5, 10 等) なら綺麗な小数にする
+      if (resDen === 2 || resDen === 4 || resDen === 5 || resDen === 10) {
+        const floatVal = Math.round((resNum / resDen) * 1000) / 1000;
+        return { html: `${floatVal}`, raw: `${floatVal}` };
+      }
+
+      // それ以外（1/3など循環小数になる場合）は分数で表示
+      const sign = resNum < 0 ? "-" : "";
+      return {
+        html: `${sign}${makeFracHTML(Math.abs(resNum), resDen)}`,
+        raw: `${resNum}/${resDen}`
+      };
     }
 
     // --- 【単元1：正負の数】 ---
@@ -516,32 +581,30 @@
         const t1 = createTerm(intChk, fracChk, decChk);
         const t2 = createTerm(intChk, fracChk, decChk);
         const isAdd = Math.random() < 0.5;
-        // 先頭はカッコなし、第2項は負の場合のみカッコ
         const firstStr = t1.html.replace(/^\((.+)\)$/, '$1');
         const secondStr = wrapParen(t2);
         q = `${firstStr} ${isAdd ? '+' : '-'} ${secondStr}`;
-        const ansVal = isAdd ? t1.val + t2.val : t1.val - t2.val;
-        a = `${ansVal}`; raw = a;
+        const res = calculateTermResult(t1, t2, isAdd ? '+' : '-');
+        a = res.html; raw = res.raw;
       } else if (step === 2) { // かっこ有り
         const t1 = createTerm(intChk, fracChk, decChk);
         const t2 = createTerm(intChk, fracChk, decChk);
         const isSub = Math.random() < 0.5;
         q = `${wrapParen(t1)} ${isSub ? '-' : '+'} ${wrapParen(t2)}`;
-        const ansVal = isSub ? t1.val - t2.val : t1.val + t2.val;
-        a = `${ansVal}`; raw = a;
+        const res = calculateTermResult(t1, t2, isSub ? '-' : '+');
+        a = res.html; raw = res.raw;
       } else if (step === 3) { // 乗除
         const t1 = createTerm(intChk, fracChk, decChk);
         const t2 = createTerm(intChk, fracChk, decChk);
         if (Math.random() < 0.5) {
           q = `${wrapParen(t1)} × ${wrapParen(t2)}`;
-          const ansVal = t1.val * t2.val;
-          a = `${ansVal}`; raw = a;
+          const res = calculateTermResult(t1, t2, '*');
+          a = res.html; raw = res.raw;
         } else {
-          if (t2.val === 0) t2.val = 2;
-          const prod = t1.val * t2.val;
-          const prodTerm = { val: prod, html: prod < 0 ? `(${prod})` : `${prod}`, isNeg: prod < 0 };
-          q = `${wrapParen(prodTerm)} ÷ ${wrapParen(t2)}`;
-          a = `${t1.val}`; raw = a;
+          if (t2.num === 0) { t2.num = 2; t2.den = 1; t2.html = "2"; t2.val = 2; t2.isNeg = false; }
+          q = `${wrapParen(t1)} ÷ ${wrapParen(t2)}`;
+          const res = calculateTermResult(t1, t2, '/');
+          a = res.html; raw = res.raw;
         }
       } else if (step === 4) { // 累乗
         const base = randInt(2, 5); const exp = randInt(2, 3); const isMinusOutside = Math.random() < 0.5;
