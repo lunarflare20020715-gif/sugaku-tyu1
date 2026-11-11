@@ -127,9 +127,9 @@
           <input type="text" id="student-name" placeholder="例：山田 太郎" class="bg-transparent text-sm font-bold text-slate-800 outline-none w-28 sm:w-32" onchange="autoSubmitScore()">
         </div>
 
-        <button onclick="openSheetConfig()" title="Googleスプレッドシートの連携URLを設定" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5">
-          ⚙️ シート連携
-        </button>
+        <!-- シート連携ボタンは非表示（先生のURLを埋め込み済みのため自動送信されます） -->
+        <button id="sheet-config-btn" onclick="openSheetConfig()" class="hidden"></button>
+
         <button onclick="openScoreList()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5">
           📋 成績一覧
         </button>
@@ -224,33 +224,6 @@
       <button onclick="submitModalName()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-2xl shadow-md transition-transform transform active:scale-95 text-base">
         名前を登録して始める
       </button>
-    </div>
-  </div>
-
-  <!-- ================= Googleスプレッドシート設定モーダル ================= -->
-  <div id="sheet-config-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 no-print">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 border border-emerald-100 text-left">
-      <div class="flex justify-between items-center mb-4 border-b pb-3">
-        <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
-          <span>📗</span> Googleスプレッドシート連携設定
-        </h3>
-        <button onclick="closeSheetConfig()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">✕</button>
-      </div>
-      <p class="text-xs text-slate-600 leading-relaxed mb-4">
-        Googleスプレッドシートの「Apps Script」で作成した<strong>ウェブアプリURL（execで終わるURL）</strong>を貼り付けると、生徒が問題を解くたびにあなたのスプレッドシートへ自動記録されます。
-      </p>
-      <div class="mb-4">
-        <label class="block text-xs font-bold text-slate-500 mb-1">ウェブアプリURL (Webhook URL):</label>
-        <input type="url" id="sheet-webhook-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs border border-slate-300 rounded-xl p-3 outline-none focus:border-emerald-500 text-slate-800 bg-slate-50 font-mono">
-      </div>
-      <div class="flex justify-end gap-2">
-        <button onclick="closeSheetConfig()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100">
-          閉じる
-        </button>
-        <button onclick="saveSheetConfig()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-xl text-xs shadow-md">
-          保存してテスト送信
-        </button>
-      </div>
     </div>
   </div>
 
@@ -553,7 +526,6 @@
       } else {
         const decVal = randInt(-9, 9) * 0.5; // -4.5 ~ 4.5
         if (decVal === 0) return createTerm(true, fracAllowed, false);
-        // 小数を正確な有理数(num/den)に変換 (0.5刻みなので分母は2)
         const num = Math.round(decVal * 2);
         const den = 2;
         const html = decVal < 0 ? `(${decVal})` : `${decVal}`;
@@ -909,7 +881,7 @@
         updatedAt: new Date().toISOString()
       };
 
-      // 1. Googleスプレッドシートへの二重送信（先生のGAS URLをデフォルトとして直接埋め込み済み）
+      // Googleスプレッドシートへの二重送信（先生のGAS URLをデフォルトとして直接埋め込み済み）
       const defaultWebhookUrl = "https://script.google.com/macros/s/AKfycbzWpyyquIzfRMm8iXbmvdktIKGpzHtIusRwK0NE-tMOy_M8RmZirPNc6IHaOk4m1AH9/exec";
       const sheetUrl = localStorage.getItem('math_sheet_webhook_url') || defaultWebhookUrl;
 
@@ -932,7 +904,7 @@
         }
       }
 
-      // 2. クラウドDB（Firebase）への同期
+      // クラウドDB（Firebase）への同期
       if (window.db && window.currentUserUid) {
         try {
           const appId = typeof __app_id !== 'undefined' ? __app_id : 'math-trace-app';
@@ -947,23 +919,18 @@
     function openSheetConfig() {
       const defaultWebhookUrl = "https://script.google.com/macros/s/AKfycbzWpyyquIzfRMm8iXbmvdktIKGpzHtIusRwK0NE-tMOy_M8RmZirPNc6IHaOk4m1AH9/exec";
       const url = localStorage.getItem('math_sheet_webhook_url') || defaultWebhookUrl;
-      document.getElementById('sheet-webhook-url').value = url;
-      document.getElementById('sheet-config-modal').classList.remove('hidden');
-    }
-
-    function closeSheetConfig() {
-      document.getElementById('sheet-config-modal').classList.add('hidden');
-    }
-
-    function saveSheetConfig() {
-      const inputUrl = document.getElementById('sheet-webhook-url').value.trim();
-      if (inputUrl) {
-        localStorage.setItem('math_sheet_webhook_url', inputUrl);
-        autoSubmitScore(); // テスト送信
-      } else {
-        localStorage.removeItem('math_sheet_webhook_url');
+      const newUrl = prompt("Google Apps Script の Webhook URL を設定してください:", url);
+      if (newUrl !== null) {
+        const trimmed = newUrl.trim();
+        if (trimmed) {
+          localStorage.setItem('math_sheet_webhook_url', trimmed);
+          autoSubmitScore();
+          alert("URLを保存しました。");
+        } else {
+          localStorage.removeItem('math_sheet_webhook_url');
+          alert("カスタムURLを解除し、デフォルトURLに戻しました。");
+        }
       }
-      closeSheetConfig();
     }
 
     async function openScoreList() {
