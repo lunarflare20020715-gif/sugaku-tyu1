@@ -127,6 +127,9 @@
           <input type="text" id="student-name" placeholder="例：山田 太郎" class="bg-transparent text-sm font-bold text-slate-800 outline-none w-28 sm:w-32" onchange="autoSubmitScore()">
         </div>
 
+        <button onclick="openSheetConfig()" title="Googleスプレッドシートの連携URLを設定" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5">
+          ⚙️ シート連携
+        </button>
         <button onclick="openScoreList()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5">
           📋 成績一覧
         </button>
@@ -224,6 +227,33 @@
     </div>
   </div>
 
+  <!-- ================= Googleスプレッドシート設定モーダル ================= -->
+  <div id="sheet-config-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 border border-emerald-100 text-left">
+      <div class="flex justify-between items-center mb-4 border-b pb-3">
+        <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
+          <span>📗</span> Googleスプレッドシート連携設定
+        </h3>
+        <button onclick="closeSheetConfig()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">✕</button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed mb-4">
+        Googleスプレッドシートの「Apps Script」で作成した<strong>ウェブアプリURL（execで終わるURL）</strong>を貼り付けると、生徒が問題を解くたびにあなたのスプレッドシートへ自動記録されます。
+      </p>
+      <div class="mb-4">
+        <label class="block text-xs font-bold text-slate-500 mb-1">ウェブアプリURL (Webhook URL):</label>
+        <input type="url" id="sheet-webhook-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs border border-slate-300 rounded-xl p-3 outline-none focus:border-emerald-500 text-slate-800 bg-slate-50 font-mono">
+      </div>
+      <div class="flex justify-end gap-2">
+        <button onclick="closeSheetConfig()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100">
+          閉じる
+        </button>
+        <button onclick="saveSheetConfig()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-xl text-xs shadow-md">
+          保存してテスト送信
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= 分析モーダル ================= -->
   <div id="analysis-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 no-print">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 sm:p-8 border border-indigo-100 max-h-[90vh] overflow-y-auto">
@@ -241,18 +271,46 @@
 
   <!-- ================= 先生用 成績一覧モーダル ================= -->
   <div id="score-list-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 no-print">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl p-6 sm:p-8 border border-indigo-100 max-h-[90vh] overflow-y-auto">
-      <div class="flex justify-between items-center mb-6 border-b pb-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl p-6 sm:p-8 border border-indigo-100 max-h-[90vh] flex flex-col">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-200 gap-3">
         <div>
           <h3 class="text-xl font-black text-slate-800 flex items-center gap-2">
-            <span>📋</span> クラス成績一覧（リアルタイムシート）
+            <span>📊</span> 成績スプレッドシート
           </h3>
-          <p class="text-xs text-slate-400 mt-1">生徒が解答するたびに自動で最新データに更新されます</p>
+          <p class="text-xs text-slate-400 mt-0.5">リアルタイム同期・クラス全体の学習状況シート</p>
         </div>
-        <button onclick="closeScoreList()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">✕</button>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button onclick="copyScoresToClipboard()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1.5 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1 border border-slate-200">
+            📋 シート用にコピー
+          </button>
+          <button onclick="downloadScoresCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1">
+            📥 CSV保存
+          </button>
+          <button onclick="closeScoreList()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2 ml-1">✕</button>
+        </div>
       </div>
-      <div id="score-list-content" class="overflow-x-auto">
-        <!-- テーブルがここに挿入されます -->
+
+      <!-- クイック統計サマリー -->
+      <div class="grid grid-cols-3 gap-3 my-4">
+        <div class="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100 text-center">
+          <span class="text-[10px] font-bold text-indigo-500 uppercase block">参加生徒数</span>
+          <span id="stat-student-count" class="text-xl font-black text-indigo-700">0</span>名
+        </div>
+        <div class="bg-emerald-50/60 p-3 rounded-xl border border-emerald-100 text-center">
+          <span class="text-[10px] font-bold text-emerald-600 uppercase block">クラス平均正答率</span>
+          <span id="stat-class-avg" class="text-xl font-black text-emerald-700">0%</span>
+        </div>
+        <div class="bg-amber-50/60 p-3 rounded-xl border border-amber-100 text-center">
+          <span class="text-[10px] font-bold text-amber-600 uppercase block">総解答問題数</span>
+          <span id="stat-total-solved" class="text-xl font-black text-amber-700">0</span>問
+        </div>
+      </div>
+
+      <div id="score-list-content" class="overflow-x-auto flex-1 border border-slate-200 rounded-2xl">
+        <!-- スプレッドシートテーブルがここに挿入されます -->
+      </div>
+      <div id="copy-toast" class="hidden mt-3 text-center text-xs font-bold text-emerald-600 bg-emerald-50 py-1.5 rounded-lg border border-emerald-200">
+        ✅ 表データをクリップボードにコピーしました！GoogleスプレッドシートやExcelにそのまま「貼り付け」できます。
       </div>
     </div>
   </div>
@@ -334,6 +392,7 @@
 
     // 成績データ管理
     let studentStats = JSON.parse(localStorage.getItem('math_trace_stats') || '{}');
+    let cachedScoresData = []; // スプレッドシート出力・CSV出力用
 
     function renderUI() {
       const tabs = document.getElementById('unit-tabs');
@@ -504,7 +563,6 @@
 
     // 分数・小数の演算を正確に行い、HTMLとRaw文字列を返すヘルパー
     function calculateTermResult(t1, t2, op) {
-      // どちらかに分数が含まれる場合、または割り算で割り切れない場合は分数として解く
       const hasFrac = (t1.type === 'frac' || t2.type === 'frac');
       
       let resNum, resDen;
@@ -523,23 +581,19 @@
         resDen = t1.den * t2.num;
       }
 
-      // 負の符号を分子に寄せる
       if (resDen < 0) {
         resNum = -resNum;
         resDen = -resDen;
       }
 
-      // 約分
       const g = gcd(resNum, resDen);
       resNum = resNum / g;
       resDen = resDen / g;
 
-      // 整数になる場合
       if (resDen === 1) {
         return { html: `${resNum}`, raw: `${resNum}` };
       }
 
-      // 分数が絡んでいる場合は必ず分数で表示
       if (hasFrac) {
         const sign = resNum < 0 ? "-" : "";
         const absNum = Math.abs(resNum);
@@ -549,14 +603,11 @@
         };
       }
 
-      // 両方とも小数、または整数と小数の場合
-      // 10進数で割り切れる分母 (2, 4, 5, 10 等) なら綺麗な小数にする
       if (resDen === 2 || resDen === 4 || resDen === 5 || resDen === 10) {
         const floatVal = Math.round((resNum / resDen) * 1000) / 1000;
         return { html: `${floatVal}`, raw: `${floatVal}` };
       }
 
-      // それ以外（1/3など循環小数になる場合）は分数で表示
       const sign = resNum < 0 ? "-" : "";
       return {
         html: `${sign}${makeFracHTML(Math.abs(resNum), resDen)}`,
@@ -570,14 +621,13 @@
       const fracChk = document.getElementById('type-frac').checked;
       const decChk = document.getElementById('type-dec').checked;
 
-      // ヘルパー：すでにカッコがある場合は二重にしない
       const wrapParen = (term) => {
         if (!term.isNeg) return term.html;
         return term.html.startsWith("(") ? term.html : `(${term.html})`;
       };
 
       let q, a, h = "", raw = "";
-      if (step === 1) { // かっこ無し
+      if (step === 1) {
         const t1 = createTerm(intChk, fracChk, decChk);
         const t2 = createTerm(intChk, fracChk, decChk);
         const isAdd = Math.random() < 0.5;
@@ -586,14 +636,14 @@
         q = `${firstStr} ${isAdd ? '+' : '-'} ${secondStr}`;
         const res = calculateTermResult(t1, t2, isAdd ? '+' : '-');
         a = res.html; raw = res.raw;
-      } else if (step === 2) { // かっこ有り
+      } else if (step === 2) {
         const t1 = createTerm(intChk, fracChk, decChk);
         const t2 = createTerm(intChk, fracChk, decChk);
         const isSub = Math.random() < 0.5;
         q = `${wrapParen(t1)} ${isSub ? '-' : '+'} ${wrapParen(t2)}`;
         const res = calculateTermResult(t1, t2, isSub ? '-' : '+');
         a = res.html; raw = res.raw;
-      } else if (step === 3) { // 乗除
+      } else if (step === 3) {
         const t1 = createTerm(intChk, fracChk, decChk);
         const t2 = createTerm(intChk, fracChk, decChk);
         if (Math.random() < 0.5) {
@@ -606,17 +656,17 @@
           const res = calculateTermResult(t1, t2, '/');
           a = res.html; raw = res.raw;
         }
-      } else if (step === 4) { // 累乗
+      } else if (step === 4) {
         const base = randInt(2, 5); const exp = randInt(2, 3); const isMinusOutside = Math.random() < 0.5;
         q = isMinusOutside ? `-${base}<sup>${exp}</sup>` : `(-${base})<sup>${exp}</sup>`;
         a = isMinusOutside ? `-${Math.pow(base, exp)}` : `${Math.pow(-base, exp)}`;
         raw = a;
         h = "かっこの外に指数があるか、中にあるかに注意しましょう。";
-      } else if (step === 5 || step === 6) { // 混合
+      } else if (step === 5 || step === 6) {
         const n1 = randInt(-5, 5); const n2 = randInt(-5, 5); const n3 = randInt(-5, 5);
         q = `${n1} + (${n2}) × (${n3})`; a = `${n1 + n2 * n3}`; raw = a;
         h = "かけ算・わり算を先に計算します。";
-      } else if (step === 7) { // 素因数分解
+      } else if (step === 7) {
         const primes = [2, 3, 5];
         const counts = [randInt(0,3,false), randInt(0,2,false), randInt(0,1,false)];
         if (counts[0]===0 && counts[1]===0 && counts[2]===0) counts[0] = 2;
@@ -708,7 +758,6 @@
       } while (p.questionHTML === lastProblemText && loopCount < 5);
       lastProblemText = p.questionHTML;
 
-      // フォントサイズ調整（文章題等の長い問題はスッキリ表示）
       const qDisp = document.getElementById("question-display");
       if (p.questionHTML.length > 30) {
         qDisp.className = "text-base sm:text-xl font-medium mt-4 mb-8 leading-relaxed py-2 min-h-[80px] flex items-center justify-center overflow-x-auto text-slate-900";
@@ -825,41 +874,105 @@
       localStorage.setItem('math_trace_stats', JSON.stringify(studentStats));
     }
 
-    // --- Firebase自動同期 ---
+    // --- Googleスプレッドシート & クラウド自動同期 ---
     async function autoSubmitScore() {
       const name = document.getElementById('student-name').value.trim();
-      if (!name || !window.db || !window.currentUserUid) return;
+      if (!name) return;
 
       let totalCount = 0;
       let correctCount = 0;
-      Object.values(studentStats).forEach(st => {
+      let unitCounts = { 1: { t: 0, c: 0 }, 2: { t: 0, c: 0 }, 3: { t: 0, c: 0 } };
+
+      Object.keys(studentStats).forEach(key => {
+        const match = key.match(/^u(\d+)_s/);
+        const st = studentStats[key];
         totalCount += st.total;
         correctCount += st.correct;
+        if (match && unitCounts[match[1]]) {
+          unitCounts[match[1]].t += st.total;
+          unitCounts[match[1]].c += st.correct;
+        }
       });
       const accuracy = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+      const u1Acc = unitCounts[1].t > 0 ? Math.round((unitCounts[1].c / unitCounts[1].t) * 100) : "-";
+      const u2Acc = unitCounts[2].t > 0 ? Math.round((unitCounts[2].c / unitCounts[2].t) * 100) : "-";
+      const u3Acc = unitCounts[3].t > 0 ? Math.round((unitCounts[3].c / unitCounts[3].t) * 100) : "-";
 
-      try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'math-trace-app';
-        const docRef = window.FirebaseFirestore.doc(window.db, 'artifacts', appId, 'public', 'data', 'scores', window.currentUserUid);
-        await window.FirebaseFirestore.setDoc(docRef, {
-          name: name,
-          total: totalCount,
-          correct: correctCount,
-          accuracy: accuracy,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (e) {
-        console.error("Auto submit error:", e);
+      const payload = {
+        name: name,
+        total: totalCount,
+        correct: correctCount,
+        accuracy: accuracy,
+        unit1Accuracy: u1Acc,
+        unit2Accuracy: u2Acc,
+        unit3Accuracy: u3Acc,
+        updatedAt: new Date().toISOString()
+      };
+
+      // 1. Googleスプレッドシートへの二重送信（先生のGAS URLをデフォルトとして直接埋め込み済み）
+      const defaultWebhookUrl = "https://script.google.com/macros/s/AKfycbzWpyyquIzfRMm8iXbmvdktIKGpzHtIusRwK0NE-tMOy_M8RmZirPNc6IHaOk4m1AH9/exec";
+      const sheetUrl = localStorage.getItem('math_sheet_webhook_url') || defaultWebhookUrl;
+
+      if (sheetUrl) {
+        try {
+          // (A) 通常の fetch (no-cors)
+          fetch(sheetUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
+          }).catch(() => {});
+
+          // (B) GETパラメータ送信（CORSの制約を完全に無視できるバックアップ手法）
+          const encoded = encodeURIComponent(JSON.stringify(payload));
+          const ping = new Image();
+          ping.src = `${sheetUrl}${sheetUrl.includes('?') ? '&' : '?'}data=${encoded}&_t=${Date.now()}`;
+        } catch (e) {
+          console.warn("Google Sheet sync error:", e);
+        }
       }
+
+      // 2. クラウドDB（Firebase）への同期
+      if (window.db && window.currentUserUid) {
+        try {
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'math-trace-app';
+          const docRef = window.FirebaseFirestore.doc(window.db, 'artifacts', appId, 'public', 'data', 'scores', window.currentUserUid);
+          await window.FirebaseFirestore.setDoc(docRef, payload, { merge: true });
+        } catch (e) {
+          console.error("Auto submit error:", e);
+        }
+      }
+    }
+
+    function openSheetConfig() {
+      const defaultWebhookUrl = "https://script.google.com/macros/s/AKfycbzWpyyquIzfRMm8iXbmvdktIKGpzHtIusRwK0NE-tMOy_M8RmZirPNc6IHaOk4m1AH9/exec";
+      const url = localStorage.getItem('math_sheet_webhook_url') || defaultWebhookUrl;
+      document.getElementById('sheet-webhook-url').value = url;
+      document.getElementById('sheet-config-modal').classList.remove('hidden');
+    }
+
+    function closeSheetConfig() {
+      document.getElementById('sheet-config-modal').classList.add('hidden');
+    }
+
+    function saveSheetConfig() {
+      const inputUrl = document.getElementById('sheet-webhook-url').value.trim();
+      if (inputUrl) {
+        localStorage.setItem('math_sheet_webhook_url', inputUrl);
+        autoSubmitScore(); // テスト送信
+      } else {
+        localStorage.removeItem('math_sheet_webhook_url');
+      }
+      closeSheetConfig();
     }
 
     async function openScoreList() {
       document.getElementById('score-list-modal').classList.remove('hidden');
       const container = document.getElementById('score-list-content');
-      container.innerHTML = `<p class="text-center text-slate-400 py-6">読み込み中...</p>`;
+      container.innerHTML = `<p class="text-center text-slate-400 py-12 text-sm">データを読み込み中...</p>`;
 
       if (!window.db) {
-        container.innerHTML = `<p class="text-center text-rose-500 py-6">クラウドデータベースが接続されていません。</p>`;
+        container.innerHTML = `<p class="text-center text-rose-500 py-12 text-sm">クラウドデータベースが初期化されていません。</p>`;
         return;
       }
 
@@ -869,34 +982,63 @@
         const snapshot = await window.FirebaseFirestore.getDocs(q);
         
         if (snapshot.empty) {
-          container.innerHTML = `<p class="text-center text-slate-400 py-6">まだ誰も成績を送信していません。</p>`;
+          container.innerHTML = `<p class="text-center text-slate-400 py-12 text-sm">まだ提出された成績データはありません。</p>`;
           return;
         }
 
-        let html = `
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="border-b-2 border-slate-200 text-slate-500 text-xs uppercase">
-                <th class="py-3 px-4">生徒名</th>
-                <th class="py-3 px-4 text-center">挑戦数</th>
-                <th class="py-3 px-4 text-center">正解数</th>
-                <th class="py-3 px-4 text-center">正答率</th>
-                <th class="py-3 px-4 text-right">最終更新</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-sm">
-        `;
+        cachedScoresData = [];
+        let totalAllQuestions = 0;
+        let totalAllCorrect = 0;
 
         snapshot.forEach(doc => {
           const d = doc.data();
+          cachedScoresData.push(d);
+          totalAllQuestions += (d.total || 0);
+          totalAllCorrect += (d.correct || 0);
+        });
+
+        // 正答率降順でソート
+        cachedScoresData.sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0));
+
+        // 統計値の更新
+        const studentCount = cachedScoresData.length;
+        const classAvg = totalAllQuestions > 0 ? Math.round((totalAllCorrect / totalAllQuestions) * 100) : 0;
+        document.getElementById('stat-student-count').textContent = studentCount;
+        document.getElementById('stat-class-avg').textContent = `${classAvg}%`;
+        document.getElementById('stat-total-solved').textContent = totalAllQuestions;
+
+        let html = `
+          <table class="w-full text-left border-collapse text-xs sm:text-sm bg-white" id="score-table">
+            <thead class="sticky top-0 bg-slate-100/95 backdrop-blur z-10 border-b border-slate-200 text-slate-600 font-bold">
+              <tr>
+                <th class="py-2.5 px-3 border-r border-slate-200 w-12 text-center">順位</th>
+                <th class="py-2.5 px-3 border-r border-slate-200">氏名</th>
+                <th class="py-2.5 px-3 border-r border-slate-200 text-center">挑戦数</th>
+                <th class="py-2.5 px-3 border-r border-slate-200 text-center">正解数</th>
+                <th class="py-2.5 px-3 border-r border-slate-200 text-center">正答率</th>
+                <th class="py-2.5 px-3 text-right">最終更新</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+        `;
+
+        cachedScoresData.forEach((d, idx) => {
+          const rank = idx + 1;
+          const rankBadge = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}`;
           const dateStr = d.updatedAt ? new Date(d.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+          const acc = d.accuracy || 0;
+          const accColor = acc >= 80 ? 'text-emerald-600 bg-emerald-50' : acc >= 50 ? 'text-amber-600 bg-amber-50' : 'text-rose-600 bg-rose-50';
+
           html += `
-            <tr class="hover:bg-slate-50">
-              <td class="py-3 px-4 font-bold text-slate-800">${d.name || '名無し'}</td>
-              <td class="py-3 px-4 text-center text-slate-600">${d.total || 0}問</td>
-              <td class="py-3 px-4 text-center text-emerald-600 font-bold">${d.correct || 0}問</td>
-              <td class="py-3 px-4 text-center font-black ${d.accuracy >= 80 ? 'text-emerald-600' : d.accuracy >= 50 ? 'text-amber-600' : 'text-rose-600'}">${d.accuracy || 0}%</td>
-              <td class="py-3 px-4 text-right text-xs text-slate-400">${dateStr}</td>
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="py-2 px-3 border-r border-slate-200 text-center font-bold text-slate-500">${rankBadge}</td>
+              <td class="py-2 px-3 border-r border-slate-200 font-bold text-slate-800">${d.name || '名無し'}</td>
+              <td class="py-2 px-3 border-r border-slate-200 text-center font-medium text-slate-600">${d.total || 0}</td>
+              <td class="py-2 px-3 border-r border-slate-200 text-center font-bold text-emerald-600">${d.correct || 0}</td>
+              <td class="py-2 px-3 border-r border-slate-200 text-center font-black">
+                <span class="inline-block px-2 py-0.5 rounded-full ${accColor}">${acc}%</span>
+              </td>
+              <td class="py-2 px-3 text-right text-slate-400 text-xs">${dateStr}</td>
             </tr>
           `;
         });
@@ -904,12 +1046,54 @@
         container.innerHTML = html;
       } catch (e) {
         console.error(e);
-        container.innerHTML = `<p class="text-center text-rose-500 py-6">データの取得に失敗しました。</p>`;
+        container.innerHTML = `<p class="text-center text-rose-500 py-12 text-sm">データの取得に失敗しました。</p>`;
       }
     }
 
     function closeScoreList() {
       document.getElementById('score-list-modal').classList.add('hidden');
+    }
+
+    // クリップボードへTSV形式でコピー
+    function copyScoresToClipboard() {
+      if (!cachedScoresData || cachedScoresData.length === 0) return;
+      let text = "順位\t氏名\t挑戦問題数\t正解数\t正答率\t最終更新日時\n";
+      cachedScoresData.forEach((d, i) => {
+        const dateStr = d.updatedAt ? new Date(d.updatedAt).toLocaleString('ja-JP') : '-';
+        text += `${i + 1}\t${d.name || '名無し'}\t${d.total || 0}\t${d.correct || 0}\t${d.accuracy || 0}%\t${dateStr}\n`;
+      });
+
+      const tempArea = document.createElement("textarea");
+      tempArea.value = text;
+      document.body.appendChild(tempArea);
+      tempArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempArea);
+
+      const toast = document.getElementById('copy-toast');
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3500);
+    }
+
+    // CSVダウンロード
+    function downloadScoresCSV() {
+      if (!cachedScoresData || cachedScoresData.length === 0) return;
+      let csvContent = "\uFEFF順位,氏名,挑戦問題数,正解数,正答率,最終更新日時\n";
+      cachedScoresData.forEach((d, i) => {
+        const dateStr = d.updatedAt ? new Date(d.updatedAt).toLocaleString('ja-JP') : '-';
+        const cleanName = (d.name || '名無し').replace(/"/g, '""');
+        csvContent += `${i + 1},"${cleanName}",${d.total || 0},${d.correct || 0},${d.accuracy || 0}%,${dateStr}\n`;
+      });
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const today = new Date().toISOString().slice(0, 10);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `中1数学_成績一覧_${today}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     function submitModalName() {
@@ -978,7 +1162,6 @@
     }
 
     window.onload = () => {
-      // Firebase Firestore命名空間の退避
       if (typeof window.db !== 'undefined' && window.db) {
         window.FirebaseFirestore = {
           doc: window.doc || (() => {}),
