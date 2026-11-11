@@ -3,8 +3,57 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>中1数学 計算＆プリント自動生成アプリ</title>
+  <title>Math Trace - 中1基礎計算</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Global Firebase references
+    window.firebaseApp = null;
+    window.db = null;
+    window.auth = null;
+    window.currentUserUid = null;
+
+    try {
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'math-trace-app';
+      const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+        apiKey: "demo-key",
+        projectId: "demo-project"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const auth = getAuth(app);
+
+      window.firebaseApp = app;
+      window.db = db;
+      window.auth = auth;
+
+      const initAuth = async () => {
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            await signInAnonymously(auth);
+          }
+          if (auth.currentUser) {
+            window.currentUserUid = auth.currentUser.uid;
+            if (typeof window.onFirebaseReady === 'function') {
+              window.onFirebaseReady();
+            }
+          }
+        } catch (e) {
+          console.error("Auth init error:", e);
+        }
+      };
+      initAuth();
+    } catch (e) {
+      console.warn("Firebase initialization skipped or failed:", e);
+    }
+  </script>
   <style>
     /* 分数の縦積み表示用CSS */
     .fraction {
@@ -26,19 +75,17 @@
     
     /* 印刷用スタイル（A4プリント作成用） */
     @media print {
-      body { background: white; color: black; font-size: 12pt; }
+      body { background: white; color: black; font-size: 11pt; }
       .no-print { display: none !important; }
       .print-only { display: block !important; }
       .page-break { page-break-before: always; }
-      .print-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem 1rem;
+      .print-single {
+        display: block;
+        max-width: 100%;
       }
-      .problem-item { break-inside: avoid; margin-bottom: 3rem; }
-      .answer-item { break-inside: avoid; margin-bottom: 1rem; }
+      .problem-item { break-inside: avoid; margin-bottom: 1.5rem; }
+      .answer-item { break-inside: avoid; margin-bottom: 0.75rem; }
       h1, h2 { text-align: center; }
-      /* 印刷時はプレビュー画面の「戻る」ボタンを隠す */
       .print-preview-back { display: none !important; }
     }
     .print-only { display: none; }
@@ -47,30 +94,47 @@
     .preview-mode .print-only { display: block; }
     .preview-mode .max-w-4xl { display: none; }
 
-    /* 印刷時の表示制御（新規追加） */
-    body.hide-problems #print-problem-section { display: none !important; }
-    body.hide-answers #print-answer-section { display: none !important; }
-
     /* 入力エリアのアニメーション */
     .fade-enter { opacity: 0; transform: translateY(-10px); }
     .fade-enter-active { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans min-h-screen">
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
   <!-- ================= UI (画面表示用) ================= -->
-  <div class="max-w-3xl mx-auto p-4 sm:p-6 no-print">
+  <div class="max-w-4xl mx-auto p-4 sm:p-6 no-print">
     <!-- Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 py-2 gap-4">
-      <h1 class="text-2xl sm:text-3xl font-bold text-blue-700 flex items-center gap-2 w-full justify-center sm:justify-start">
-        <span class="text-3xl sm:text-4xl">📐</span> 中1基礎計算
-      </h1>
-      <div class="flex gap-2 shrink-0">
-        <button onclick="showAnalysis()" class="bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-bold py-2 px-3 sm:px-4 rounded-xl shadow-sm transition-all text-xs sm:text-sm flex items-center gap-2">
-          📊 <span class="hidden sm:inline">成績分析</span>
+    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+      <div class="flex items-center gap-3">
+        <!-- Sleek Modern SVG Logo -->
+        <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-md shadow-indigo-200">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            Math Trace <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">中1基礎計算</span>
+          </h1>
+          <p class="text-xs text-slate-400">ステップ式 自学自習・プリント自動生成システム</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+        <!-- 生徒名入力 -->
+        <div class="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+          <span class="text-xs font-bold text-slate-500">名前:</span>
+          <input type="text" id="student-name" placeholder="例：山田 太郎" class="bg-transparent text-sm font-bold text-slate-800 outline-none w-28 sm:w-32" onchange="autoSubmitScore()">
+        </div>
+
+        <button onclick="openScoreList()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5">
+          📋 成績一覧
         </button>
-        <button onclick="generatePrint(20)" class="bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-bold py-2 px-3 sm:px-4 rounded-xl shadow-sm transition-all text-xs sm:text-sm flex items-center gap-2">
-          🖨️ <span class="hidden sm:inline">プリント作成</span>
+        <button onclick="showAnalysis()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold py-2 px-3 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5 border border-indigo-200">
+          📊 成績分析
+        </button>
+        <button onclick="generatePrint(20)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5">
+          🖨️ プリント作成
         </button>
       </div>
     </div>
@@ -80,42 +144,46 @@
       <!-- Generated by JS -->
     </div>
 
-    <!-- Number Type Toggles (新規追加) -->
-    <div class="flex justify-center space-x-4 mb-4 no-print" id="number-type-tabs">
-      <label class="cursor-pointer flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-200 transition-colors hover:bg-gray-50">
-        <input type="checkbox" id="numType-int" checked onchange="toggleNumType('integer')" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
-        <span class="text-sm font-bold text-gray-700">整数</span>
-      </label>
-      <label class="cursor-pointer flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-200 transition-colors hover:bg-gray-50">
-        <input type="checkbox" id="numType-frac" onchange="toggleNumType('fraction')" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
-        <span class="text-sm font-bold text-gray-700">分数</span>
-      </label>
-      <label class="cursor-pointer flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-200 transition-colors hover:bg-gray-50">
-        <input type="checkbox" id="numType-dec" onchange="toggleNumType('decimal')" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
-        <span class="text-sm font-bold text-gray-700">小数</span>
-      </label>
-    </div>
-
     <!-- Settings Panel -->
-    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
-      <h2 class="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">出題ステップ</h2>
-      <div class="flex flex-wrap gap-2" id="step-pills">
-        <!-- Generated by JS -->
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">出題ステップ</h2>
+          <div class="flex flex-wrap gap-2" id="step-pills">
+            <!-- Generated by JS -->
+          </div>
+        </div>
+
+        <!-- 数値タイプ選択（単元1のみ有効） -->
+        <div id="number-type-container" class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <span class="text-xs font-bold text-slate-500 block mb-1.5">出題する数字のタイプ：</span>
+          <div class="flex flex-wrap gap-3 text-xs font-semibold text-slate-700">
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" id="type-int" checked onchange="handleNumberTypeChange()" class="rounded text-indigo-600 focus:ring-indigo-500"> 整数
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" id="type-frac" onchange="handleNumberTypeChange()" class="rounded text-indigo-600 focus:ring-indigo-500"> 分数
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" id="type-dec" onchange="handleNumberTypeChange()" class="rounded text-indigo-600 focus:ring-indigo-500"> 小数
+            </label>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Interactive Problem Card -->
-    <div class="bg-white px-6 py-10 sm:px-12 sm:py-12 rounded-3xl shadow-lg border border-blue-50 text-center relative mb-6">
-      <div class="absolute top-4 left-6 text-sm font-bold text-blue-500 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">問題</div>
+    <div class="bg-white px-6 py-10 sm:px-12 sm:py-12 rounded-3xl shadow-lg border border-indigo-50 text-center relative mb-6">
+      <div class="absolute top-4 left-6 text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">問題</div>
       
-      <div id="question-display" class="text-3xl sm:text-4xl font-medium mt-4 mb-8 leading-relaxed py-2 min-h-[80px] flex items-center justify-center overflow-x-auto">
+      <div id="question-display" class="font-medium mt-4 mb-8 leading-relaxed py-2 min-h-[80px] flex items-center justify-center overflow-x-auto text-slate-900">
         <!-- 問題 -->
       </div>
       
       <!-- 入力モード切替タブ -->
       <div class="flex justify-center gap-2 mb-6">
-        <button onclick="setInputMode('normal')" id="tab-normal" class="px-4 py-1.5 rounded-full text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all">通常入力</button>
-        <button onclick="setInputMode('fraction')" id="tab-fraction" class="px-4 py-1.5 rounded-full text-sm font-bold border-2 border-gray-300 bg-white text-gray-500 hover:border-blue-400 transition-all">分数入力</button>
+        <button onclick="setInputMode('normal')" id="tab-normal" class="px-4 py-1.5 rounded-full text-xs font-bold border-2 border-indigo-600 bg-indigo-600 text-white transition-all">通常入力</button>
+        <button onclick="setInputMode('fraction')" id="tab-fraction" class="px-4 py-1.5 rounded-full text-xs font-bold border-2 border-slate-200 bg-white text-slate-500 hover:border-indigo-400 transition-all">分数入力</button>
       </div>
 
       <!-- Answer Input Area -->
@@ -125,100 +193,117 @@
 
       <!-- Feedback & Hint -->
       <div id="feedback-display" class="hidden mb-6 text-xl sm:text-2xl font-bold py-4 px-6 rounded-2xl transition-all"></div>
-      <div id="hint-text" class="hidden text-left bg-yellow-50 p-4 rounded-xl text-sm sm:text-base text-yellow-800 border border-yellow-200 mb-8 leading-relaxed"></div>
+      <div id="hint-text" class="hidden text-left bg-amber-50 p-4 rounded-xl text-sm sm:text-base text-amber-800 border border-amber-200 mb-8 leading-relaxed"></div>
 
       <!-- Controls -->
       <div class="max-w-sm mx-auto">
-        <button id="check-btn" onclick="checkAnswer()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl shadow-md transition-transform transform active:scale-95 text-lg">
+        <button id="check-btn" onclick="checkAnswer()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-md transition-transform transform active:scale-95 text-base">
           答え合わせ
         </button>
-        <button id="next-btn" onclick="startProblem()" class="hidden w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-2xl shadow-md transition-transform transform active:scale-95 text-lg">
+        <button id="next-btn" onclick="startProblem()" class="hidden w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-2xl shadow-md transition-transform transform active:scale-95 text-base">
           次の問題へ
         </button>
       </div>
     </div>
   </div>
 
+  <!-- ================= 名前未入力ガードモーダル ================= -->
+  <div id="name-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 text-center border border-indigo-100 transform transition-all">
+      <div class="text-5xl mb-4">👤✨</div>
+      <h3 class="text-xl font-bold text-slate-800 mb-2">お名前を入力してください</h3>
+      <p class="text-sm text-slate-500 mb-6">問題を解く前に、右上のお名前入力欄にお名前またはニックネームを入力してください。</p>
+      
+      <div class="mb-6">
+        <input type="text" id="modal-name-input" placeholder="例：山田 太郎" class="w-full text-center border-2 border-indigo-200 focus:border-indigo-600 rounded-2xl py-3 px-4 text-lg font-bold outline-none bg-indigo-50/50 text-slate-800 transition-all">
+      </div>
+
+      <button onclick="submitModalName()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-2xl shadow-md transition-transform transform active:scale-95 text-base">
+        名前を登録して始める
+      </button>
+    </div>
+  </div>
+
   <!-- ================= 分析モーダル ================= -->
   <div id="analysis-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 no-print">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 sm:p-8 border border-indigo-100 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-6 border-b pb-4">
-        <h2 class="text-2xl font-bold text-gray-800">📊 学習分析レポート</h2>
-        <button onclick="hideAnalysis()" class="text-gray-400 hover:text-gray-800 text-3xl font-bold transition-colors">&times;</button>
+        <h3 class="text-xl font-black text-slate-800 flex items-center gap-2">
+          <span>📊</span> 学習成績分析レポート
+        </h3>
+        <button onclick="closeAnalysis()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">✕</button>
       </div>
       <div id="analysis-content" class="space-y-6">
-        <!-- JSで生成 -->
+        <!-- 分析結果がここに挿入されます -->
       </div>
-      <div class="mt-8 text-center">
-        <button onclick="hideAnalysis()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-8 rounded-xl shadow-md transition-transform transform active:scale-95">
-          閉じる
-        </button>
+    </div>
+  </div>
+
+  <!-- ================= 先生用 成績一覧モーダル ================= -->
+  <div id="score-list-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl p-6 sm:p-8 border border-indigo-100 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-6 border-b pb-4">
+        <div>
+          <h3 class="text-xl font-black text-slate-800 flex items-center gap-2">
+            <span>📋</span> クラス成績一覧（リアルタイムシート）
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">生徒が解答するたびに自動で最新データに更新されます</p>
+        </div>
+        <button onclick="closeScoreList()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">✕</button>
+      </div>
+      <div id="score-list-content" class="overflow-x-auto">
+        <!-- テーブルがここに挿入されます -->
       </div>
     </div>
   </div>
 
   <!-- ================= 印刷用エリア (画面では非表示) ================= -->
-  <div id="print-area" class="print-only p-4 bg-gray-200 min-h-screen">
+  <div id="print-area" class="print-only p-8 bg-white min-h-screen">
     
-    <!-- プレビュー時の操作パネル（印刷時はCSSで消えます） -->
-    <div class="print-preview-back flex flex-wrap justify-center gap-3 mb-6 bg-white p-4 rounded-xl shadow">
-      <button onclick="closePrintPreview()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-5 rounded-lg shadow text-sm transition-colors">
-        ← 設定に戻る
+    <!-- プレビュープレイヤーツールバー -->
+    <div class="print-preview-back flex flex-wrap justify-between items-center mb-8 pb-4 border-b-2 border-slate-200">
+      <button onclick="closePrintPreview()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-5 rounded-xl shadow text-sm">
+        ← 設定画面に戻る
       </button>
-      <button onclick="doPrint('all')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-lg shadow text-sm transition-colors">
-        🖨️ 問題＋解答を印刷
-      </button>
-      <button onclick="doPrint('problems')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-5 rounded-lg shadow text-sm transition-colors">
-        📄 問題のみ印刷
-      </button>
-      <button onclick="doPrint('answers')" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-lg shadow text-sm transition-colors">
-        📝 解答のみ印刷
-      </button>
+      <div class="flex items-center gap-3">
+        <button onclick="executePrint('all')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-xl shadow text-sm flex items-center gap-2">
+          🖨️ 問題＋解答を印刷
+        </button>
+        <button onclick="executePrint('problems')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl shadow text-sm flex items-center gap-2">
+          📄 問題のみ印刷
+        </button>
+        <button onclick="executePrint('answers')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-xl shadow text-sm flex items-center gap-2">
+          📝 解答のみ印刷
+        </button>
+      </div>
     </div>
 
     <!-- 問題プリント -->
-    <div id="print-problem-section" class="bg-white p-8 sm:p-12 shadow-lg mx-auto mb-8" style="max-width: 210mm; min-height: 297mm;">
-      <h1 class="text-xl font-bold mb-4 border-b-2 border-black pb-2 flex justify-between items-end">
-        <span id="print-title">数学 確認テスト</span>
-        <span class="text-sm font-normal">年　　組　　番　名前：　　　　　　　　　　　　</span>
-      </h1>
-      <div id="print-problems" class="print-grid text-lg mt-6"></div>
+    <div id="print-problem-sheet" class="print-single page-break-after">
+      <div class="text-center mb-6">
+        <h1 id="print-title" class="text-2xl font-black text-slate-900 mb-2">数学 確認テスト</h1>
+        <div class="flex justify-between items-end border-b-2 border-slate-800 pb-2 text-sm font-bold text-slate-700">
+          <span id="print-subtitle">単元・ステップ</span>
+          <span>年　組　番　氏名：<span class="inline-block w-48 border-b border-slate-800"></span></span>
+        </div>
+      </div>
+      <div id="print-problems" class="space-y-4 text-base"></div>
     </div>
 
     <!-- 解答プリント -->
-    <div id="print-answer-section" class="page-break bg-white p-8 sm:p-12 shadow-lg mx-auto" style="max-width: 210mm; min-height: 297mm;">
-      <h1 class="text-xl font-bold mb-4 border-b-2 border-black pb-2 flex justify-between items-end">
-        <span id="print-title-ans">数学 確認テスト【解答】</span>
-      </h1>
-      <div id="print-answers" class="print-grid text-lg mt-6 text-red-600 font-bold"></div>
+    <div id="print-answer-sheet" class="print-single page-break">
+      <div class="text-center mb-6">
+        <h1 id="print-title-ans" class="text-2xl font-black text-slate-900 mb-2">数学 確認テスト【解答】</h1>
+        <div class="flex justify-between items-end border-b-2 border-slate-800 pb-2 text-sm font-bold text-slate-700">
+          <span id="print-subtitle-ans">単元・ステップ</span>
+        </div>
+      </div>
+      <div id="print-answers" class="space-y-3 text-base text-emerald-700 font-bold"></div>
     </div>
   </div>
 
   <!-- ================= JavaScript ロジック ================= -->
   <script>
-    // --- 状態管理・数値タイプ設定 ---
-    let numTypes = { integer: true, fraction: false, decimal: false };
-    
-    // 直前の問題パターンを記録する変数（連続防止用）
-    let lastPatternIndex = -1;
-
-    // --- 学習記録用データ ---
-    let userStats = {
-      total: { attempted: 0, correct: 0 },
-      units: { 1: { attempted: 0, correct: 0 }, 2: { attempted: 0, correct: 0 }, 3: { attempted: 0, correct: 0 } },
-      steps: {} // 例: "1-1": { attempted: 1, correct: 1 }
-    };
-
-    function toggleNumType(type) {
-      numTypes[type] = !numTypes[type];
-      // 最低1つはチェックされた状態を保つ
-      if (!numTypes.integer && !numTypes.fraction && !numTypes.decimal) {
-        numTypes.integer = true;
-        document.getElementById('numType-int').checked = true;
-      }
-      startProblem(); // 設定変更後にすぐ問題を再生成
-    }
-
     // --- メニュー定義 ---
     const stepDefinitions = {
       1: [
@@ -244,36 +329,56 @@
     let currentUnit = 1;
     let currentStep = 1;
     let currentProblem = null;
-    let currentInputMode = 'normal'; // 'normal' または 'fraction'
+    let currentInputMode = 'normal';
+    let lastProblemText = ""; // 連続同一問題防止用
+
+    // 成績データ管理
+    let studentStats = JSON.parse(localStorage.getItem('math_trace_stats') || '{}');
 
     function renderUI() {
       const tabs = document.getElementById('unit-tabs');
       tabs.innerHTML = units.map(u => `
-        <button onclick="setUnit(${u.id})" class="whitespace-nowrap px-6 py-3 rounded-full font-bold text-sm transition-all ${currentUnit === u.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'}">
+        <button onclick="setUnit(${u.id})" class="whitespace-nowrap px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all ${currentUnit === u.id ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}">
           ${u.name}
         </button>
       `).join('');
 
       const pills = document.getElementById('step-pills');
       pills.innerHTML = stepDefinitions[currentUnit].map((stepName, idx) => `
-        <button onclick="setStep(${idx + 1})" class="px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${currentStep === idx + 1 ? 'bg-blue-100 text-blue-700 border-2 border-blue-400 font-bold' : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'}">
+        <button onclick="setStep(${idx + 1})" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all ${currentStep === idx + 1 ? 'bg-indigo-50 text-indigo-700 border-2 border-indigo-500 font-bold shadow-sm' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}">
           ${stepName}
         </button>
       `).join('');
+
+      // 単元1のときだけ「整数・分数・小数」のチェックボックスを表示
+      const numTypeContainer = document.getElementById('number-type-container');
+      if (currentUnit === 1) {
+        numTypeContainer.style.display = 'block';
+      } else {
+        numTypeContainer.style.display = 'none';
+      }
     }
 
     function setUnit(uId) {
       currentUnit = uId;
       currentStep = 1;
-      lastPatternIndex = -1; // 単元切り替え時にリセット
       renderUI();
       startProblem();
     }
 
     function setStep(sId) {
       currentStep = sId;
-      lastPatternIndex = -1; // ステップ切り替え時にリセット
       renderUI();
+      startProblem();
+    }
+
+    function handleNumberTypeChange() {
+      const intChk = document.getElementById('type-int').checked;
+      const fracChk = document.getElementById('type-frac').checked;
+      const decChk = document.getElementById('type-dec').checked;
+      if (!intChk && !fracChk && !decChk) {
+        document.getElementById('type-int').checked = true; // 最低1つは維持
+      }
       startProblem();
     }
 
@@ -284,34 +389,32 @@
       const tabF = document.getElementById('tab-fraction');
       
       if (mode === 'normal') {
-        tabN.className = "px-4 py-1.5 rounded-full text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all";
-        tabF.className = "px-4 py-1.5 rounded-full text-sm font-bold border-2 border-gray-300 bg-white text-gray-500 hover:border-blue-400 transition-all";
+        tabN.className = "px-4 py-1.5 rounded-full text-xs font-bold border-2 border-indigo-600 bg-indigo-600 text-white transition-all";
+        tabF.className = "px-4 py-1.5 rounded-full text-xs font-bold border-2 border-slate-200 bg-white text-slate-500 hover:border-indigo-400 transition-all";
         
         document.getElementById('input-area').innerHTML = `
-          <input type="text" id="user-input-normal" autocomplete="off" class="w-full max-w-sm text-center text-3xl sm:text-4xl font-bold border-b-4 border-gray-300 focus:border-blue-500 outline-none bg-transparent pb-2 transition-colors placeholder-gray-300 text-blue-800 fade-enter-active" placeholder="答えを入力">
+          <input type="text" id="user-input-normal" autocomplete="off" class="w-full max-w-sm text-center text-3xl sm:text-4xl font-bold border-b-4 border-slate-300 focus:border-indigo-600 outline-none bg-transparent pb-2 transition-colors placeholder-slate-300 text-indigo-900 fade-enter-active" placeholder="答えを入力">
           <div class="flex gap-4 mt-3">
-            <button onclick="insertChar('^2')" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded border border-gray-300 text-sm font-bold shadow-sm">x² (累乗)</button>
-            <button onclick="insertChar('^3')" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded border border-gray-300 text-sm font-bold shadow-sm">x³ (累乗)</button>
+            <button onclick="insertChar('^2')" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200 text-xs font-bold shadow-sm">x² (累乗)</button>
+            <button onclick="insertChar('^3')" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200 text-xs font-bold shadow-sm">x³ (累乗)</button>
           </div>
         `;
         setupEnterKey('user-input-normal');
         document.getElementById('user-input-normal').focus();
       } else {
-        tabF.className = "px-4 py-1.5 rounded-full text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all";
-        tabN.className = "px-4 py-1.5 rounded-full text-sm font-bold border-2 border-gray-300 bg-white text-gray-500 hover:border-blue-400 transition-all";
+        tabF.className = "px-4 py-1.5 rounded-full text-xs font-bold border-2 border-indigo-600 bg-indigo-600 text-white transition-all";
+        tabN.className = "px-4 py-1.5 rounded-full text-xs font-bold border-2 border-slate-200 bg-white text-slate-500 hover:border-indigo-400 transition-all";
         
         document.getElementById('input-area').innerHTML = `
-          <div class="flex items-center gap-4 fade-enter-active">
-            <!-- 符号・整数部分 -->
-            <input type="text" id="user-input-sign" class="w-16 text-center text-3xl font-bold border-b-4 border-gray-300 focus:border-blue-500 outline-none bg-transparent pb-1" placeholder="-">
-            <!-- 分数部分 -->
-            <div class="flex flex-col items-center gap-2">
-              <input type="text" id="user-input-num" class="w-24 text-center text-2xl font-bold border-b-2 border-gray-400 focus:border-blue-500 outline-none bg-transparent pb-1" placeholder="分子">
-              <div class="w-full h-0.5 bg-gray-600"></div>
-              <input type="text" id="user-input-den" class="w-24 text-center text-2xl font-bold border-b-2 border-transparent focus:border-blue-500 outline-none bg-transparent pt-1" placeholder="分母">
+          <div class="flex items-center gap-3 fade-enter-active">
+            <input type="text" id="user-input-sign" class="w-14 text-center text-3xl font-bold border-b-4 border-slate-300 focus:border-indigo-600 outline-none bg-transparent pb-1" placeholder="-">
+            <div class="flex flex-col items-center gap-1.5">
+              <input type="text" id="user-input-num" class="w-24 text-center text-xl font-bold border-b-2 border-slate-400 focus:border-indigo-600 outline-none bg-transparent pb-1" placeholder="分子">
+              <div class="w-full h-0.5 bg-slate-700"></div>
+              <input type="text" id="user-input-den" class="w-24 text-center text-xl font-bold border-b-2 border-transparent focus:border-indigo-600 outline-none bg-transparent pt-1" placeholder="分母">
             </div>
           </div>
-          <p class="text-xs text-gray-400 mt-2">※マイナスや帯分数の整数部分は左の枠へ</p>
+          <p class="text-xs text-slate-400 mt-2">※マイナスは左の枠へ</p>
         `;
         setupEnterKey('user-input-sign');
         setupEnterKey('user-input-num');
@@ -320,7 +423,6 @@
       }
     }
 
-    // ボタンから文字を挿入するヘルパー
     window.insertChar = function(char) {
       const input = document.getElementById('user-input-normal');
       if(input) {
@@ -329,7 +431,6 @@
       }
     }
 
-    // Enterキーの共通設定
     function setupEnterKey(id) {
       const el = document.getElementById(id);
       if (el) {
@@ -346,7 +447,6 @@
       }
     }
 
-
     // --- ユーティリティ関数 ---
     function randInt(min, max, excludeZero = true) {
       let n;
@@ -354,24 +454,9 @@
       return n;
     }
     function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-    function pickWithHistory(arr, lastIdxRef) {
-      if (arr.length <= 1) return { value: arr[0], index: 0 };
-      let idx;
-      do {
-        idx = Math.floor(Math.random() * arr.length);
-      } while (idx === lastIdxRef);
-      return { value: arr[idx], index: idx };
-    }
-    function shuffle(arr) {
-      const copy = [...arr];
-      for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
-      }
-      return copy;
-    }
     function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while(b){let t=b; b=a%b; a=t;} return a; }
     function lcm(a, b) { return Math.abs(a * b) / gcd(a, b); }
+
     function makeFracHTML(numHTML, denHTML) {
       return `<span class="fraction"><span style="border-bottom:1.5px solid currentColor;padding:0 4px;">${numHTML}</span><span style="padding:0 4px;">${denHTML}</span></span>`;
     }
@@ -387,60 +472,77 @@
       return res;
     }
 
-    // --- 【単元1：正負の数】 (簡易版) ---
-    function generateUnit1(step) {
-      let q, a, h = "", raw = "";
-      
-      // 有効な数値タイプからランダムに1つ選ぶ
-      const activeTypes = [];
-      if(numTypes.integer) activeTypes.push('int');
-      if(numTypes.decimal) activeTypes.push('dec');
-      if(numTypes.fraction) activeTypes.push('frac');
-      const chosen = pick(activeTypes);
+    // 単元1用の柔軟な数値オブジェクト生成（整数・分数・小数に対応）
+    function createTerm(intAllowed, fracAllowed, decAllowed) {
+      const types = [];
+      if (intAllowed) types.push('int');
+      if (fracAllowed) types.push('frac');
+      if (decAllowed) types.push('dec');
+      const t = pick(types);
 
-      if (step === 1 || step === 2) { 
-        // かっこ無し(1) / かっこ有り(2)
-        const hasParen = (step === 2);
-        const isSub = Math.random() < 0.5; // ひき算かたし算か
-        const opStr = isSub ? '-' : '+';
-        
-        if (chosen === 'int') {
-           const n1 = randInt(-9, 9); const n2 = randInt(-9, 9);
-           const sum = isSub ? n1 - n2 : n1 + n2;
-           if (hasParen) q = `(${n1}) ${opStr} (${n2})`;
-           else q = `${n1} ${!isSub && n2 > 0 ? '+' : '-'} ${Math.abs(n2)}`;
-           a = `${sum}`; raw = a;
-        } else if (chosen === 'dec') {
-           const n1 = randInt(-99, 99)/10; const n2 = randInt(-99, 99)/10;
-           // JSの小数計算の誤差を丸めで補正
-           const sum = isSub ? Math.round((n1 - n2)*10)/10 : Math.round((n1 + n2)*10)/10;
-           if (hasParen) q = `(${n1}) ${opStr} (${n2})`;
-           else q = `${n1} ${!isSub && n2 > 0 ? '+' : '-'} ${Math.abs(n2)}`;
-           a = `${sum}`; raw = a;
-        } else if (chosen === 'frac') {
-           const den = randInt(2, 5); // 簡略化のため同分母
-           const n1 = randInt(-5, 5); const n2 = randInt(-5, 5);
-           const sumNum = isSub ? n1 - n2 : n1 + n2;
-           
-           if (hasParen) q = `(${makeFracHTML(n1, den)}) ${opStr} (${makeFracHTML(n2, den)})`;
-           else q = `${makeFracHTML(n1, den)} ${!isSub && n2 > 0 ? '+' : '-'} ${makeFracHTML(Math.abs(n2), den)}`;
-           
-           if (sumNum === 0) { 
-             a = "0"; raw = "0"; 
-           } else {
-             const g = gcd(sumNum, den);
-             const numA = sumNum / g; const denA = den / g;
-             const sign = (numA * denA < 0) ? "-" : "";
-             const absNum = Math.abs(numA); const absDen = Math.abs(denA);
-             if (absDen === 1) { a = `${sign}${absNum}`; raw = `${sign}${absNum}`; }
-             else { a = `${sign}${makeFracHTML(absNum, absDen)}`; raw = `${sign}(${absNum})/${absDen}`; }
-           }
-        }
-        h = chosen==='frac' ? "分母が同じ分数の加減は分子だけを計算し、最後に約分します。" : (chosen==='dec' ? "小数の計算は位をしっかり合わせましょう。" : "");
+      if (t === 'int') {
+        const val = randInt(-9, 9);
+        return { val: val, html: `${val < 0 ? `(${val})` : val}`, raw: `${val}`, isNeg: val < 0 };
+      } else if (t === 'frac') {
+        const den = pick([2, 3, 4, 5]);
+        let num;
+        do { num = randInt(-8, 8); } while (num === 0 || gcd(Math.abs(num), den) !== 1);
+        const fracStr = makeFracHTML(Math.abs(num), den);
+        const html = num < 0 ? `(-${fracStr})` : fracStr;
+        const raw = `${num}/${den}`;
+        return { val: num / den, html: html, raw: raw, isFrac: true, num, den, isNeg: num < 0 };
+      } else {
+        const decVal = randInt(-9, 9) * 0.5; // -4.5 ~ 4.5
+        if (decVal === 0) return createTerm(true, fracAllowed, false);
+        const html = decVal < 0 ? `(${decVal})` : `${decVal}`;
+        return { val: decVal, html: html, raw: `${decVal}`, isNeg: decVal < 0 };
+      }
+    }
+
+    // --- 【単元1：正負の数】 ---
+    function generateUnit1(step) {
+      const intChk = document.getElementById('type-int').checked;
+      const fracChk = document.getElementById('type-frac').checked;
+      const decChk = document.getElementById('type-dec').checked;
+
+      // ヘルパー：すでにカッコがある場合は二重にしない
+      const wrapParen = (term) => {
+        if (!term.isNeg) return term.html;
+        return term.html.startsWith("(") ? term.html : `(${term.html})`;
+      };
+
+      let q, a, h = "", raw = "";
+      if (step === 1) { // かっこ無し
+        const t1 = createTerm(intChk, fracChk, decChk);
+        const t2 = createTerm(intChk, fracChk, decChk);
+        const isAdd = Math.random() < 0.5;
+        // 先頭はカッコなし、第2項は負の場合のみカッコ
+        const firstStr = t1.html.replace(/^\((.+)\)$/, '$1');
+        const secondStr = wrapParen(t2);
+        q = `${firstStr} ${isAdd ? '+' : '-'} ${secondStr}`;
+        const ansVal = isAdd ? t1.val + t2.val : t1.val - t2.val;
+        a = `${ansVal}`; raw = a;
+      } else if (step === 2) { // かっこ有り
+        const t1 = createTerm(intChk, fracChk, decChk);
+        const t2 = createTerm(intChk, fracChk, decChk);
+        const isSub = Math.random() < 0.5;
+        q = `${wrapParen(t1)} ${isSub ? '-' : '+'} ${wrapParen(t2)}`;
+        const ansVal = isSub ? t1.val - t2.val : t1.val + t2.val;
+        a = `${ansVal}`; raw = a;
       } else if (step === 3) { // 乗除
-        const n1 = randInt(-9, 9); const n2 = randInt(-9, 9);
-        if (Math.random() < 0.5) { q = `(${n1}) × (${n2})`; a = `${n1 * n2}`; raw = a; }
-        else { const ans = randInt(-9, 9); q = `(${ans * n2}) ÷ (${n2})`; a = `${ans}`; raw = a; }
+        const t1 = createTerm(intChk, fracChk, decChk);
+        const t2 = createTerm(intChk, fracChk, decChk);
+        if (Math.random() < 0.5) {
+          q = `${wrapParen(t1)} × ${wrapParen(t2)}`;
+          const ansVal = t1.val * t2.val;
+          a = `${ansVal}`; raw = a;
+        } else {
+          if (t2.val === 0) t2.val = 2;
+          const prod = t1.val * t2.val;
+          const prodTerm = { val: prod, html: prod < 0 ? `(${prod})` : `${prod}`, isNeg: prod < 0 };
+          q = `${wrapParen(prodTerm)} ÷ ${wrapParen(t2)}`;
+          a = `${t1.val}`; raw = a;
+        }
       } else if (step === 4) { // 累乗
         const base = randInt(2, 5); const exp = randInt(2, 3); const isMinusOutside = Math.random() < 0.5;
         q = isMinusOutside ? `-${base}<sup>${exp}</sup>` : `(-${base})<sup>${exp}</sup>`;
@@ -454,7 +556,7 @@
       } else if (step === 7) { // 素因数分解
         const primes = [2, 3, 5];
         const counts = [randInt(0,3,false), randInt(0,2,false), randInt(0,1,false)];
-        if (counts[0]===0 && counts[1]===0 && counts[2]===0) counts[0] = 2; // 最低限
+        if (counts[0]===0 && counts[1]===0 && counts[2]===0) counts[0] = 2;
         let val = 1; let ansStr = []; let rawArr = [];
         counts.forEach((c, i) => {
           if(c > 0) { 
@@ -470,17 +572,17 @@
 
     // --- 【単元2：文字式】 ---
     function generateUnit2(step) {
-      if (step === 1) { // 表し方
+      if (step === 1) {
         const coeff = pick([-1, 1, randInt(-5,5)]);
         return { questionHTML: `y × (${coeff}) × x`, answerHTML: coeff === 1 ? "xy" : coeff === -1 ? "-xy" : `${coeff}xy` };
-      } else if (step === 2) { // 加減
+      } else if (step === 2) {
         const a=randInt(-5,5); const b=randInt(-5,5); const c=randInt(-5,5); const d=randInt(-5,5);
         return { questionHTML: `(${formatLinear(a,b)}) - (${formatLinear(c,d)})`, answerHTML: formatLinear(a-c, b-d) };
-      } else if (step === 3) { // 乗除
+      } else if (step === 3) {
         const k=randInt(-5,5); const a=randInt(-5,5); const b=randInt(-5,5);
         return { questionHTML: `${k}(${formatLinear(a,b)})`, answerHTML: formatLinear(k*a, k*b) };
-      } else if (step === 4) { // 分数式
-        const m=randInt(2,4); let n; do { n = randInt(2,5); } while(n === m); // m!=n
+      } else if (step === 4) {
+        const m=randInt(2,4); let n; do { n = randInt(2,5); } while(n === m);
         const a=randInt(-3,3); const b=randInt(-3,3); const c=randInt(-3,3); const d=randInt(-3,3);
         const L = lcm(m, n); const m1=L/m; const m2=L/n;
         const topX = a*m1 + c*m2; const topC = b*m1 + d*m2;
@@ -488,140 +590,75 @@
         let ansNum = formatLinear(topX/g, topC/g); let den = L/g;
         return { 
           questionHTML: `${makeFracHTML(formatLinear(a,b), m)} + ${makeFracHTML(formatLinear(c,d), n)}`, 
-          answerHTML: den===1 ? ansNum : makeFracHTML(ansNum, den) 
+          answerHTML: den===1 ? ansNum : makeFracHTML(ansNum, den),
+          answerRaw: den===1 ? ansNum : `(${ansNum})/${den}`
         };
-      } else if (step === 5) { // 立式
-        return generateUnit2Step5_ExpressionFormula();
+      } else if (step === 5) {
+        const patterns = [
+          () => { const n1=randInt(2,5); const pay=1000; return { q: `1本 a 円の鉛筆 ${n1}本を買い、${pay}円出したときのおつりは y 円だった。`, a: `${pay} - ${n1}a = y` }; },
+          () => { const v=pick([40,50,60]); return { q: `x mの道のりを分速 ${v} mで進んだら y 分かかった。`, a: makeFracHTML("x", v) + " = y", raw: `x/${v}=y` }; },
+          () => { const c=randInt(3,6); const p=500; return { q: `${p}円持って行き、1個 x 円のパンを${c}個買おうとしたが足りなかった。`, a: `${c}x > ${p}` }; },
+          () => { const r=20; return { q: `定価 x 円の品を ${r}％引きで買った代金は y 円だった。`, a: `0.8x = y` }; }
+        ];
+        const p = pick(patterns)();
+        return { questionHTML: p.q + " (等式・不等式で表せ)", answerHTML: p.a, answerRaw: p.raw || p.a, hint: "文章通りに式を組み立てます。" };
       }
     }
 
-    function generateUnit2Step5_ExpressionFormula() {
-      const patterns = [
-        () => { const n1=randInt(2,8); const pay=pick([500,1000,1500,2000,3000,5000]); return { q: `1本 a 円の鉛筆 ${n1}本を買い、${pay}円出したときのおつりは y 円だった。`, a: `${pay} - ${n1}a = y` }; },
-        () => { const v=pick([40,50,60,70,75,80,90,100]); return { q: `x mの道のりを分速 ${v} mで進んだら y 分かかった。`, a: makeFracHTML("x", v) + " = y", raw: `x/${v}=y` }; },
-        () => { const c=randInt(3,12); const p=pick([500,800,1000,1200,1500,2000,3000]); return { q: `${p}円持って行き、1個 x 円のパンを${c}個買おうとしたが足りなかった。`, a: `${c}x > ${p}` }; },
-        () => { const r=pick([10,15,20,25,30,40]); return { q: `定価 x 円の品を ${r}％引きで買った代金は y 円だった。`, a: `${(100-r)/100}x = y` }; },
-        () => { const h=pick([60,65,70,75,80,85]); return { q: `数学a点,英語b点,国語c点のとき、3教科の平均点は${h}点以上だった。`, a: `(a+b+c)/3 >= ${h}`, raw: `(a+b+c)/3>=${h}` }; }
-      ];
-      
-      const { value: pFunc, index: idx } = pickWithHistory(patterns, lastPatternIndex);
-      lastPatternIndex = idx;
-      
-      const p = pFunc();
-      return { questionHTML: p.q + " (等式・不等式で表せ)", answerHTML: p.a, answerRaw: p.raw || p.a, hint: "文章通りに式を組み立てます。" };
-    }
-
-    // --- 【単元3：方程式】 ---
+    // --- 【単元3：一次方程式】 ---
     function generateUnit3(step) {
-      const ansX = randInt(-6, 6); // 逆算のコア
-      if (step === 1) { // 移項
+      const ansX = randInt(-6, 6);
+      if (step === 1) {
         const a = randInt(-8,8); return { questionHTML: formatLinear(1, a) + ` = ${ansX + a}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
-      } else if (step === 2) { // 両辺
+      } else if (step === 2) {
         const a=randInt(-5,5); let c; do { c = randInt(-5,5); } while(c === a); const b=randInt(-5,5);
         return { questionHTML: `${formatLinear(a,b)} = ${formatLinear(c, a*ansX+b-c*ansX)}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
-      } else if (step === 3) { // かっこ
+      } else if (step === 3) {
         const k=randInt(-4,4); const a=randInt(-5,5); let c; do { c = randInt(-4,4); } while(c === k);
         return { questionHTML: `${k}(${formatLinear(1,a)}) = ${formatLinear(c, k*(ansX+a)-c*ansX)}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
-      } else if (step === 4) { // 分数
-      const m=2; const n=3; const k1=randInt(-3,3); const k2=k1; 
-      const a = k1*m - ansX; const b = k2*n - 2*ansX;
-      return { questionHTML: `${makeFracHTML(formatLinear(1,a),m)} = ${makeFracHTML(formatLinear(2,b),n)}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
-    } else if (step === 5) { // 比例式
-      const ans = randInt(1, 4) * 3; // 3の倍数にして小数を防ぐ
-      return { questionHTML: `3 : 2 = x : ${ans*2/3}`, answerHTML: `x = ${ans}`, answerRaw: `${ans}` };
-    } else if (step === 6) { // 文章題
-      return generateUnit3Step6_WordProblems();
+      } else if (step === 4) {
+        const m=2; const n=3; const k1=randInt(-3,3); const k2=k1; 
+        const a = k1*m - ansX; const b = k2*n - 2*ansX;
+        return { questionHTML: `${makeFracHTML(formatLinear(1,a),m)} = ${makeFracHTML(formatLinear(2,b),n)}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
+      } else if (step === 5) {
+        const ans = randInt(1, 4) * 3;
+        return { questionHTML: `3 : 2 = x : ${ans*2/3}`, answerHTML: `x = ${ans}`, answerRaw: `${ans}` };
+      } else if (step === 6) {
+        const patterns = [
+          () => { const x=randInt(3,7); const total=10; const aP=120; const oP=80; return { q: `1個${aP}円のりんごと1個${oP}円のみかんを合わせて${total}個買い、代金は${aP*x + oP*(total-x)}円でした。りんごは何個？`, a: `${x} 個`, raw: `${x}` }; },
+          () => { const x=randInt(10,20); const p1=3; const p2=4; const extra=5; return { q: `アメを1人に${p1}個配ると${extra}個余り、${p2}個配ると不足した。人数は？`, a: `${x} 人`, raw: `${x}` }; },
+          () => { const ans=10; const v1=60; const v2=90; const d=5; return { q: `弟が分速${v1}mで出発し、その${d}分後に兄が分速${v2}mで追いかけた。兄は何分後に追いつく？`, a: `${ans} 分後`, raw: `${ans}` }; }
+        ];
+        const p = pick(patterns)();
+        return { questionHTML: p.q, answerHTML: p.a, answerRaw: p.raw, hint: "求めるものを x として方程式を立てます。" };
       }
     }
 
-    function generateUnit3Step6_WordProblems() {
-      const patterns = [
-        () => { 
-          const x=randInt(3,12); // りんご
-          const y=randInt(2,10); // みかん
-          const total=x+y; 
-          const aP=pick([100,120,130,140,150,200]); 
-          const oP=pick([50,60,70,80,90]); 
-          return { q: `1個${aP}円のりんごと1個${oP}円のみかんを合わせて${total}個買い、代金は${aP*x + oP*y}円でした。りんごは何個？`, a: `${x} 個`, raw: `${x}` }; 
-        },
-        () => { 
-          let x, p1, p2, extra, short;
-          // 足りない数（short）がマイナスにならないよう、確実に自然数になる組み合わせを引き直す
-          do {
-            x = randInt(10,35); 
-            p1 = randInt(3,6); 
-            p2 = p1 + randInt(1,2); 
-            extra = randInt(4,15); 
-            short = p2*x - (p1*x + extra);
-          } while (short <= 0);
-          return { q: `アメを1人に${p1}個配ると${extra}個余り、${p2}個配ると${short}個足りない。人数は？`, a: `${x} 人`, raw: `${x}` }; 
-        },
-        () => { 
-          const p = pick([
-            {v1: 60, v2: 90, d: 5, ans: 10}, {v1: 60, v2: 100, d: 6, ans: 9},
-            {v1: 50, v2: 80, d: 6, ans: 10}, {v1: 70, v2: 105, d: 4, ans: 8},
-            {v1: 80, v2: 120, d: 5, ans: 10}, {v1: 60, v2: 80, d: 10, ans: 30}
-          ]);
-          return { q: `弟が分速${p.v1}mで出発し、その${p.d}分後に兄が分速${p.v2}mで追いかけた。兄は何分後に追いつく？`, a: `${p.ans} 分後`, raw: `${p.ans}` }; 
-        },
-        () => { 
-          let ans, mult, childNow, childFuture, parentFuture, parentNow;
-          // 父親の年齢が25歳〜50歳で、かつ親子差が20歳以上という現実的な設定になるまで引き直す
-          do {
-            ans = randInt(3, 10); // 何年後か
-            mult = pick([2, 3, 4]); // 何倍になるか
-            childNow = randInt(6, 14); // 現在の子の年齢
-            childFuture = childNow + ans;
-            parentFuture = childFuture * mult;
-            parentNow = parentFuture - ans;
-          } while (parentNow < 25 || parentNow > 50 || (parentNow - childNow) < 20);
-          
-          return { q: `父は${parentNow}歳、子は${childNow}歳。父の年齢が子の年齢の${mult}倍になるのは何年後？`, a: `${ans} 年後`, raw: `${ans}` }; 
-        },
-        () => {
-          const diff = randInt(2, 8);   
-          // 縦がマイナスにならないよう、先に縦の長さ（height）を決める
-          const height = randInt(4, 12);
-          const width = height + diff; 
-          const perimeter = 2 * (width + height);
-          return { q: `縦が横より${diff}cm短い長方形がある。周の長さが${perimeter}cmのとき、横の長さは何cm？`, a: `${width} cm`, raw: `${width}` };
-        }
-      ];
-      
-      const { value: pFunc, index: idx } = pickWithHistory(patterns, lastPatternIndex);
-      lastPatternIndex = idx;
-      
-      const p = pFunc();
-      return { questionHTML: p.q, answerHTML: p.a, answerRaw: p.raw, hint: "求めるものを x として方程式を立てます。" };
-    }
-
-    // --- メインコントローラー ---
     function getProblem() {
-      const u = currentUnit;
-      const s = currentStep;
-      if (u === 1) return generateUnit1(s);
-      if (u === 2) return generateUnit2(s);
-      if (u === 3) return generateUnit3(s);
+      let p;
+      let loopCount = 0;
+      do {
+        if (currentUnit === 1) p = generateUnit1(currentStep);
+        else if (currentUnit === 2) p = generateUnit2(currentStep);
+        else p = generateUnit3(currentStep);
+        loopCount++;
+      } while (p.questionHTML === lastProblemText && loopCount < 5);
+      lastProblemText = p.questionHTML;
+
+      // フォントサイズ調整（文章題等の長い問題はスッキリ表示）
+      const qDisp = document.getElementById("question-display");
+      if (p.questionHTML.length > 30) {
+        qDisp.className = "text-base sm:text-xl font-medium mt-4 mb-8 leading-relaxed py-2 min-h-[80px] flex items-center justify-center overflow-x-auto text-slate-900";
+      } else {
+        qDisp.className = "text-3xl sm:text-4xl font-medium mt-4 mb-8 leading-relaxed py-2 min-h-[80px] flex items-center justify-center overflow-x-auto text-slate-900";
+      }
+
+      return p;
     }
 
-    // --- 画面操作イベント ---
     function startProblem() {
       currentProblem = getProblem();
-      const qDisplay = document.getElementById("question-display");
-      qDisplay.innerHTML = currentProblem.questionHTML;
-      
-      // 文字数に応じてフォントサイズを自動調整（文章題対策）
-      const textLength = qDisplay.textContent.length;
-      if (textLength > 30) {
-        // 文章題など文字数が多い場合はフォントを小さくし、行間を広げる
-        qDisplay.className = "text-lg sm:text-xl font-medium mt-4 mb-8 leading-loose py-2 min-h-[80px] flex items-center justify-center px-2 sm:px-6";
-      } else {
-        // 通常の計算式は大きく表示
-        qDisplay.className = "text-3xl sm:text-4xl font-medium mt-4 mb-8 leading-relaxed py-2 min-h-[80px] flex items-center justify-center overflow-x-auto";
-      }
-      
-      // 入力モードの初期化・クリア
-      // （※問題の性質を見て、自動で分数タブに切り替えることも可能ですが、ここではユーザー操作優先）
+      document.getElementById("question-display").innerHTML = currentProblem.questionHTML;
       setInputMode(currentInputMode);
 
       document.getElementById("feedback-display").classList.add("hidden");
@@ -631,7 +668,6 @@
       document.getElementById("next-btn").classList.add("hidden");
     }
 
-    // 全角→半角・空白除去のユーティリティ
     function normalizeInput(str) {
       if(!str) return "";
       return str.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(s) {
@@ -640,8 +676,15 @@
     }
 
     function checkAnswer() {
+      const nameInput = document.getElementById('student-name').value.trim();
+      if (!nameInput) {
+        document.getElementById('modal-name-input').value = "";
+        document.getElementById('name-modal').classList.remove('hidden');
+        setTimeout(() => document.getElementById('modal-name-input').focus(), 100);
+        return;
+      }
+
       let userVal = "";
-      
       if (currentInputMode === 'normal') {
         const inputEl = document.getElementById("user-input-normal");
         userVal = normalizeInput(inputEl.value);
@@ -655,20 +698,11 @@
         const num = normalizeInput(numEl.value);
         const den = normalizeInput(denEl.value);
         
-        // 帯分数や分数としての結合
         if (num && den) {
-          // もしsignが数字だったら（例：2 1/3）、分数式としてではなく文字列として結合（簡単な一致判定のため）
-          // ※高度な数式評価をするならMath.jsが必要ですが、ここでは文字列一致ベースの簡易判定
-          if(sign === "-" || sign === "") {
-             userVal = `${sign}(${num})/${den}`;
-          } else {
-             // 単なる「-」以外の文字が入っていたらそのままくっつける（イレギュラーケース）
-             userVal = `${sign}(${num})/${den}`; 
-          }
+          userVal = `${sign}(${num})/${den}`;
         } else if (sign) {
-          userVal = sign; // 分数枠が空の場合は左枠だけを採用
+          userVal = sign;
         }
-        
         signEl.disabled = true;
         numEl.disabled = true;
         denEl.disabled = true;
@@ -681,39 +715,20 @@
         ansVal = String(currentProblem.answerHTML).replace(/<[^>]*>?/gm, '').replace(/\s+/g, "").toLowerCase();
       }
 
-      // 文章題などで単位がある場合、数字だけ入力されても正解とみなす配慮
       const ansNumMatch = ansVal.match(/^-?\d+/);
       const ansNumOnly = ansNumMatch ? ansNumMatch[0] : null;
 
       let isCorrect = false;
-      
-      // ① 完全一致
       if (userVal === ansVal) isCorrect = true;
-      // ② 方程式の x= の省略許容
       if (!isCorrect && userVal === ansVal.replace(/^x=/, '')) isCorrect = true;
-      // ③ 文章題の単位省略許容
       if (!isCorrect && ansNumOnly && userVal === ansNumOnly) isCorrect = true;
-      // ④ 分数入力特有のカッコつき一致
       if (!isCorrect && currentInputMode === 'fraction') {
-         // ansValが a/b の形か (a+b)/c の形の場合の比較緩和など
-         const altUser = userVal.replace(/[()]/g, ""); // カッコを外してみる
-         const altAns = ansVal.replace(/[()]/g, "");
-         if (altUser === altAns) isCorrect = true;
+         if (userVal.replace(/[()]/g, "") === ansVal.replace(/[()]/g, "")) isCorrect = true;
       }
 
-      // --- 記録処理 ---
-      const stepKey = `${currentUnit}-${currentStep}`;
-      if (!userStats.steps[stepKey]) userStats.steps[stepKey] = { attempted: 0, correct: 0 };
-      
-      userStats.total.attempted++;
-      userStats.units[currentUnit].attempted++;
-      userStats.steps[stepKey].attempted++;
-      
-      if (isCorrect) {
-        userStats.total.correct++;
-        userStats.units[currentUnit].correct++;
-        userStats.steps[stepKey].correct++;
-      }
+      // 成績の記録と自動送信
+      recordStats(currentUnit, currentStep, isCorrect);
+      autoSubmitScore();
 
       const feedbackEl = document.getElementById("feedback-display");
       const hintEl = document.getElementById("hint-text");
@@ -722,10 +737,10 @@
 
       if (isCorrect) {
         feedbackEl.innerHTML = "⭕ 大正解！";
-        feedbackEl.className = "mb-6 text-xl sm:text-2xl font-bold py-4 px-6 rounded-2xl bg-green-100 text-green-700 border border-green-300";
+        feedbackEl.className = "mb-6 text-xl sm:text-2xl font-bold py-4 px-6 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200";
       } else {
-        feedbackEl.innerHTML = `❌ 残念...<br><span class="text-base sm:text-lg mt-3 inline-block">正解は：<span class="font-black text-red-600 mx-2 text-2xl">${currentProblem.answerHTML}</span></span>`;
-        feedbackEl.className = "mb-6 text-xl sm:text-2xl font-bold py-4 px-6 rounded-2xl bg-red-50 text-red-700 border border-red-200";
+        feedbackEl.innerHTML = `❌ 残念...<br><span class="text-base sm:text-lg mt-3 inline-block">正解は：<span class="font-black text-rose-600 mx-2 text-2xl">${currentProblem.answerHTML}</span></span>`;
+        feedbackEl.className = "mb-6 text-xl sm:text-2xl font-bold py-4 px-6 rounded-2xl bg-rose-50 text-rose-700 border border-rose-200";
         if (currentProblem.hint) {
           hintEl.innerHTML = `💡 <span class="font-bold">アドバイス：</span><br>${currentProblem.hint}`;
           hintEl.classList.remove("hidden");
@@ -737,8 +752,178 @@
       setTimeout(() => document.getElementById("next-btn").focus(), 100);
     }
 
-    // 起動時の初期化
+    function recordStats(uId, sId, isCorrect) {
+      const key = `u${uId}_s${sId}`;
+      if (!studentStats[key]) {
+        studentStats[key] = { total: 0, correct: 0 };
+      }
+      studentStats[key].total += 1;
+      if (isCorrect) studentStats[key].correct += 1;
+      localStorage.setItem('math_trace_stats', JSON.stringify(studentStats));
+    }
+
+    // --- Firebase自動同期 ---
+    async function autoSubmitScore() {
+      const name = document.getElementById('student-name').value.trim();
+      if (!name || !window.db || !window.currentUserUid) return;
+
+      let totalCount = 0;
+      let correctCount = 0;
+      Object.values(studentStats).forEach(st => {
+        totalCount += st.total;
+        correctCount += st.correct;
+      });
+      const accuracy = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+
+      try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'math-trace-app';
+        const docRef = window.FirebaseFirestore.doc(window.db, 'artifacts', appId, 'public', 'data', 'scores', window.currentUserUid);
+        await window.FirebaseFirestore.setDoc(docRef, {
+          name: name,
+          total: totalCount,
+          correct: correctCount,
+          accuracy: accuracy,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {
+        console.error("Auto submit error:", e);
+      }
+    }
+
+    async function openScoreList() {
+      document.getElementById('score-list-modal').classList.remove('hidden');
+      const container = document.getElementById('score-list-content');
+      container.innerHTML = `<p class="text-center text-slate-400 py-6">読み込み中...</p>`;
+
+      if (!window.db) {
+        container.innerHTML = `<p class="text-center text-rose-500 py-6">クラウドデータベースが接続されていません。</p>`;
+        return;
+      }
+
+      try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'math-trace-app';
+        const q = window.FirebaseFirestore.collection(window.db, 'artifacts', appId, 'public', 'data', 'scores');
+        const snapshot = await window.FirebaseFirestore.getDocs(q);
+        
+        if (snapshot.empty) {
+          container.innerHTML = `<p class="text-center text-slate-400 py-6">まだ誰も成績を送信していません。</p>`;
+          return;
+        }
+
+        let html = `
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b-2 border-slate-200 text-slate-500 text-xs uppercase">
+                <th class="py-3 px-4">生徒名</th>
+                <th class="py-3 px-4 text-center">挑戦数</th>
+                <th class="py-3 px-4 text-center">正解数</th>
+                <th class="py-3 px-4 text-center">正答率</th>
+                <th class="py-3 px-4 text-right">最終更新</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+        `;
+
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          const dateStr = d.updatedAt ? new Date(d.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+          html += `
+            <tr class="hover:bg-slate-50">
+              <td class="py-3 px-4 font-bold text-slate-800">${d.name || '名無し'}</td>
+              <td class="py-3 px-4 text-center text-slate-600">${d.total || 0}問</td>
+              <td class="py-3 px-4 text-center text-emerald-600 font-bold">${d.correct || 0}問</td>
+              <td class="py-3 px-4 text-center font-black ${d.accuracy >= 80 ? 'text-emerald-600' : d.accuracy >= 50 ? 'text-amber-600' : 'text-rose-600'}">${d.accuracy || 0}%</td>
+              <td class="py-3 px-4 text-right text-xs text-slate-400">${dateStr}</td>
+            </tr>
+          `;
+        });
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+      } catch (e) {
+        console.error(e);
+        container.innerHTML = `<p class="text-center text-rose-500 py-6">データの取得に失敗しました。</p>`;
+      }
+    }
+
+    function closeScoreList() {
+      document.getElementById('score-list-modal').classList.add('hidden');
+    }
+
+    function submitModalName() {
+      const modalVal = document.getElementById('modal-name-input').value.trim();
+      if (!modalVal) {
+        document.getElementById('modal-name-input').classList.add('border-rose-500', 'bg-rose-50');
+        return;
+      }
+      document.getElementById('student-name').value = modalVal;
+      document.getElementById('name-modal').classList.add('hidden');
+      
+      autoSubmitScore();
+      checkAnswer();
+    }
+
+    function showAnalysis() {
+      document.getElementById('analysis-modal').classList.remove('hidden');
+      const content = document.getElementById('analysis-content');
+      
+      let totalQ = 0;
+      let totalC = 0;
+      let detailsHTML = "";
+
+      units.forEach(u => {
+        let uQ = 0, uC = 0;
+        stepDefinitions[u.id].forEach((stepName, sIdx) => {
+          const key = `u${u.id}_s${sIdx + 1}`;
+          const st = studentStats[key] || { total: 0, correct: 0 };
+          uQ += st.total;
+          uC += st.correct;
+          totalQ += st.total;
+          totalC += st.correct;
+
+          const acc = st.total > 0 ? Math.round((st.correct / st.total) * 100) : 0;
+          detailsHTML += `
+            <div class="flex items-center justify-between py-2 border-b border-slate-100 text-sm">
+              <span class="text-slate-600 font-medium">${u.name.split('：')[1]} / ${stepName}</span>
+              <div class="flex items-center gap-4">
+                <span class="text-xs text-slate-400">${st.correct}/${st.total}問正解</span>
+                <span class="font-bold w-12 text-right ${acc >= 80 ? 'text-emerald-600' : acc >= 50 ? 'text-amber-600' : 'text-slate-400'}">${acc}%</span>
+              </div>
+            </div>
+          `;
+        });
+      });
+
+      const totalAcc = totalQ > 0 ? Math.round((totalC / totalQ) * 100) : 0;
+
+      content.innerHTML = `
+        <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 text-center">
+          <p class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">トータル正答率</p>
+          <div class="text-4xl sm:text-5xl font-black text-indigo-600 mb-2">${totalAcc}%</div>
+          <p class="text-xs text-slate-600">累計解答数：<span class="font-bold">${totalQ}</span>問中 <span class="font-bold text-emerald-600">${totalC}</span>問正解</p>
+        </div>
+        <div>
+          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">単元・ステップ別成績詳細</h4>
+          <div class="bg-slate-50 rounded-2xl p-4 border border-slate-100 max-h-60 overflow-y-auto">
+            ${detailsHTML}
+          </div>
+        </div>
+      `;
+    }
+
+    function closeAnalysis() {
+      document.getElementById('analysis-modal').classList.add('hidden');
+    }
+
     window.onload = () => {
+      // Firebase Firestore命名空間の退避
+      if (typeof window.db !== 'undefined' && window.db) {
+        window.FirebaseFirestore = {
+          doc: window.doc || (() => {}),
+          setDoc: window.setDoc || (() => {}),
+          collection: window.collection || (() => {}),
+          getDocs: window.getDocs || (() => {})
+        };
+      }
       renderUI();
       startProblem();
     };
@@ -748,144 +933,55 @@
       const uText = units.find(u => u.id === currentUnit).name;
       const sText = stepDefinitions[currentUnit][currentStep - 1];
       
-      document.getElementById("print-title").textContent = `数学 確認テスト（${uText} / ${sText}）`;
-      document.getElementById("print-title-ans").textContent = `数学 確認テスト（${uText} / ${sText}）【解答】`;
+      document.getElementById("print-title").textContent = `数学 確認テスト（${uText}）`;
+      document.getElementById("print-subtitle").textContent = `【ステップ】 ${sText}`;
+      document.getElementById("print-title-ans").textContent = `数学 確認テスト【解答】（${uText}）`;
+      document.getElementById("print-subtitle-ans").textContent = `【ステップ】 ${sText}`;
       
       const qContainer = document.getElementById("print-problems");
       const aContainer = document.getElementById("print-answers");
       qContainer.innerHTML = "";
       aContainer.innerHTML = "";
-      
-      // 印刷用は重複を避けるために履歴を初期化
-      lastPatternIndex = -1;
 
       for (let i = 1; i <= count; i++) {
         const p = getProblem();
         
-        // 問題追加
         const qDiv = document.createElement("div");
-        qDiv.className = "problem-item flex items-start";
-        qDiv.innerHTML = `<span class="font-bold mr-3 inline-block w-6 text-right">(${i})</span><div class="flex-1">${p.questionHTML}</div>`;
+        qDiv.className = "problem-item flex items-start text-base sm:text-lg";
+        qDiv.innerHTML = `<span class="font-bold mr-3 inline-block w-8 text-right">(${i})</span><div class="flex-1">${p.questionHTML}</div>`;
         qContainer.appendChild(qDiv);
 
-        // 解答追加
         const aDiv = document.createElement("div");
-        aDiv.className = "answer-item flex items-center";
-        aDiv.innerHTML = `<span class="font-bold mr-3 inline-block w-6 text-right text-black">(${i})</span><div class="flex-1">${p.answerHTML}</div>`;
+        aDiv.className = "answer-item flex items-center text-base sm:text-lg";
+        aDiv.innerHTML = `<span class="font-bold mr-3 inline-block w-8 text-right text-slate-900">(${i})</span><div class="flex-1">${p.answerHTML}</div>`;
         aContainer.appendChild(aDiv);
       }
 
-      // 画面をプレビューモードに切り替え
       document.body.classList.add("preview-mode");
-      window.scrollTo(0, 0); // 上部へスクロール
+      window.scrollTo(0, 0);
     }
 
-    // 指定された形式で印刷を実行する
-    function doPrint(type) {
-      // 一旦すべての非表示クラスをリセット
-      document.body.classList.remove('hide-problems', 'hide-answers');
+    function executePrint(mode) {
+      const pSheet = document.getElementById("print-problem-sheet");
+      const aSheet = document.getElementById("print-answer-sheet");
       
-      // 指定に応じて非表示クラスを追加
-      if (type === 'problems') document.body.classList.add('hide-answers');
-      if (type === 'answers') document.body.classList.add('hide-problems');
-      
-      setTimeout(() => {
-        try {
-          window.print();
-        } catch (e) {
-          console.log("印刷ダイアログがブロックされました。");
-        }
-        // 印刷ダイアログが閉じた後、プレビューの表示状態を元に戻す
-        setTimeout(() => {
-          document.body.classList.remove('hide-problems', 'hide-answers');
-        }, 1000);
-      }, 100);
+      if (mode === 'all') {
+        pSheet.style.display = 'block';
+        aSheet.style.display = 'block';
+      } else if (mode === 'problems') {
+        pSheet.style.display = 'block';
+        aSheet.style.display = 'none';
+      } else if (mode === 'answers') {
+        pSheet.style.display = 'none';
+        aSheet.style.display = 'block';
+      }
+      window.print();
     }
 
     function closePrintPreview() {
       document.body.classList.remove("preview-mode");
-    }
-
-    // --- 分析モーダルの操作 ---
-    function showAnalysis() {
-      const modal = document.getElementById('analysis-modal');
-      const content = document.getElementById('analysis-content');
-      
-      if (userStats.total.attempted === 0) {
-        content.innerHTML = `<p class="text-center text-gray-500 py-8">まだ問題が解かれていません。<br>いくつか問題を解いてから確認してください。</p>`;
-      } else {
-        const totalRate = Math.round((userStats.total.correct / userStats.total.attempted) * 100);
-        
-        let html = `
-          <div class="grid grid-cols-2 gap-4 text-center">
-            <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
-              <div class="text-sm font-bold text-blue-500 mb-1">全体の正答率</div>
-              <div class="text-3xl font-black text-blue-700">${totalRate}<span class="text-xl">%</span></div>
-              <div class="text-xs text-gray-500 mt-1">${userStats.total.correct} / ${userStats.total.attempted} 問正解</div>
-            </div>
-            <div class="bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm">
-              <div class="text-sm font-bold text-green-500 mb-1">解いた問題数</div>
-              <div class="text-3xl font-black text-green-700">${userStats.total.attempted}<span class="text-xl">問</span></div>
-            </div>
-          </div>
-          
-          <h3 class="font-bold text-gray-700 mt-6 border-l-4 border-blue-500 pl-3">単元別の成績</h3>
-          <div class="space-y-3">
-        `;
-        
-        units.forEach(u => {
-          const stats = userStats.units[u.id];
-          if (stats.attempted > 0) {
-            const rate = Math.round((stats.correct / stats.attempted) * 100);
-            const barColor = rate >= 80 ? 'bg-green-500' : rate >= 50 ? 'bg-yellow-400' : 'bg-red-500';
-            html += `
-              <div class="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
-                <span class="font-bold text-gray-700 text-sm">${u.name}</span>
-                <div class="flex items-center gap-3">
-                  <div class="w-24 sm:w-32 bg-gray-200 rounded-full h-2.5">
-                    <div class="${barColor} h-2.5 rounded-full" style="width: ${rate}%"></div>
-                  </div>
-                  <span class="text-sm font-bold text-gray-600 w-10 text-right">${rate}%</span>
-                </div>
-              </div>
-            `;
-          }
-        });
-        html += `</div>`;
-        
-        html += `<h3 class="font-bold text-gray-700 mt-6 border-l-4 border-red-500 pl-3">ステップ別の詳細（弱点発見）</h3>`;
-        html += `<div class="space-y-2 max-h-48 overflow-y-auto pr-2">`;
-        
-        const stepKeys = Object.keys(userStats.steps).sort((a, b) => {
-           const rA = userStats.steps[a].correct / userStats.steps[a].attempted;
-           const rB = userStats.steps[b].correct / userStats.steps[b].attempted;
-           return rA - rB; // 正答率が低い順に並べる
-        });
-        
-        stepKeys.forEach(key => {
-          const stats = userStats.steps[key];
-          const [uId, sId] = key.split('-');
-          const unitName = units.find(u => u.id == uId).name.split('：')[1];
-          const stepName = stepDefinitions[uId][sId - 1];
-          const rate = Math.round((stats.correct / stats.attempted) * 100);
-          
-          html += `
-            <div class="flex justify-between items-center text-sm p-2 rounded ${rate < 60 ? 'bg-red-50 text-red-800 font-medium' : 'bg-white text-gray-600 border border-gray-100'}">
-              <span class="truncate pr-2">[${unitName}] ${stepName}</span>
-              <span class="font-bold whitespace-nowrap">${rate}% (${stats.correct}/${stats.attempted})</span>
-            </div>
-          `;
-        });
-        
-        html += `</div>`;
-        
-        content.innerHTML = html;
-      }
-      modal.classList.remove('hidden');
-    }
-    
-    function hideAnalysis() {
-      document.getElementById('analysis-modal').classList.add('hidden');
+      document.getElementById("print-problem-sheet").style.display = 'block';
+      document.getElementById("print-answer-sheet").style.display = 'block';
     }
   </script>
 </body>
