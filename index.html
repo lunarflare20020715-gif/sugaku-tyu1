@@ -719,51 +719,61 @@
         const ans = r1 * mult;
         return { questionHTML: `${r1} : ${r2} = x : ${r2 * mult}`, answerHTML: `x = ${ans}`, answerRaw: `${ans}` };
       } else if (step === 6) {
+        // 文章題パターン（確実な逆算と数値出力）
         const patterns = [
+          // 1. 代金と個数（つるかめ算タイプ）
           () => { 
             const x = randInt(3, 8); 
             const total = randInt(10, 16); 
             const aP = pick([120, 150, 180]); 
             const oP = pick([70, 80, 90]); 
+            const totalPay = aP * x + oP * (total - x);
             return { 
-              q: `1個${aP}円のりんごと1個${oP}円のみかんを合わせて${total}個買い、代金は${aP*x + oP*(total-x)}円でした。りんごは何個？`, 
-              a: `${x} 個`, 
-              raw: `${x}`,
-              hint: `りんごを x 個とすると、みかんは (${total} - x) 個と表せます。`
+              questionHTML: `1個 ${aP} 円のりんごと1個 ${oP} 円のみかんを合わせて ${total} 個買い、代金の合計は ${totalPay} 円でした。りんごは何個買いましたか。`, 
+              answerHTML: `${x} 個`, 
+              answerRaw: `${x}`,
+              hint: `りんごを x 個とすると、みかんは (${total} - x) 個と表せます。${aP}x + ${oP}(${total} - x) = ${totalPay} の方程式を解きます。`
             }; 
           },
+          // 2. 過不足算（アメ・ノート・画用紙などの配布）
           () => { 
-            const x = randInt(5, 16); 
-            const p1 = randInt(3, 5); 
-            const p2 = p1 + randInt(1, 2); 
-            const extra = randInt(2, 9); 
-            const totalCandies = p1 * x + extra; 
-            const shortage = p2 * x - totalCandies; 
+            const x = randInt(6, 15); // 人数
+            const p1 = randInt(3, 5); // 1人あたり配る個数（少なめ）
+            const p2 = p1 + randInt(1, 2); // 1人あたり配る個数（多め）
+            const extra = randInt(2, 8); // 余り
+            const totalItems = p1 * x + extra; // 総数
+            const shortage = p2 * x - totalItems; // 不足数（必ず正の整数になる）
+            const itemNames = ["アメ", "チョコレート", "ノート", "画用紙"];
+            const item = pick(itemNames);
+            const unit = (item === "ノート" || item === "画用紙") ? "冊" : "個";
+
             return { 
-              q: `子どもたちにアメを1人${p1}個ずつ配ると${extra}個余り、1人${p2}個ずつ配ると${shortage}個不足しました。子どもの人数は何人ですか。`, 
-              a: `${x} 人`, 
-              raw: `${x}`,
-              hint: `子どもの人数を x 人とすると、アメの総数は ${p1}x + ${extra} または ${p2}x - ${shortage} と表せます。` 
+              questionHTML: `子どもたちに${item}を1人 ${p1} ${unit}ずつ配ると ${extra} ${unit}余り、1人 ${p2} ${unit}ずつ配ると ${shortage} ${unit}不足しました。子どもの人数は何人ですか。`, 
+              answerHTML: `${x} 人`, 
+              answerRaw: `${x}`,
+              hint: `子どもの人数を x 人とすると、${item}の総数は ${p1}x + ${extra} と表せます。また、1人 ${p2} ${unit}配るときの総数は ${p2}x - ${shortage} と表せるので、${p1}x + ${extra} = ${p2}x - ${shortage} を解きます。` 
             }; 
           },
+          // 3. 速さ・追いつき問題
           () => { 
-            const ans = randInt(6, 18); 
-            const v1 = pick([50, 60, 70]); 
-            const v2 = v1 + 30; 
-            const diffV = v2 - v1; // 30
-            // 割り切れるように d を逆算
-            const evenAns = (ans * diffV) % v1 === 0 ? ans : ans * 2;
-            const finalD = (evenAns * diffV) / v1;
+            const ans = randInt(6, 16); // 追いつくまでの時間（分）
+            const v1 = pick([50, 60, 70]); // 弟の分速
+            const diffV = 30; // 兄と弟の速度差
+            const v2 = v1 + diffV; // 兄の分速
+            // 割り切れるように出発差 d 分を逆算: v2 * ans = v1 * (ans + d) => diffV * ans = v1 * d
+            const evenAns = (ans * diffV) % v1 === 0 ? ans : (ans * 2);
+            const finalD = Math.round((evenAns * diffV) / v1);
+
             return { 
-              q: `弟が分速${v1}mで家を出発し、その${finalD}分後に兄が分速${v2}mで追いかけました。兄は何分後に弟に追いつきますか。`, 
-              a: `${evenAns} 分後`, 
-              raw: `${evenAns}`,
-              hint: `兄が追いつくまでの時間を x 分とすると、弟が進んだ時間は (x + ${finalD}) 分となります。道のりが等しいことから方程式を立てます。` 
+              questionHTML: `弟が分速 ${v1} mで家を出発し、その ${finalD} 分後に兄が分速 ${v2} mで同じ道を追いかけました。兄は何分後に弟に追いつきますか。`, 
+              answerHTML: `${evenAns} 分後`, 
+              answerRaw: `${evenAns}`,
+              hint: `兄が追いつくまでの時間を x 分とすると、弟が進んだ時間は (x + ${finalD}) 分となります。兄が進んだ道のりと弟が進んだ道のりが等しいので、${v2}x = ${v1}(x + ${finalD}) を解きます。` 
             }; 
           }
         ];
         const p = pick(patterns)();
-        return { questionHTML: p.q, answerHTML: p.a, answerRaw: p.raw, hint: p.hint || "求めるものを x として方程式を立てます。" };
+        return p;
       }
     }
 
