@@ -361,7 +361,10 @@
     let currentStep = 1;
     let currentProblem = null;
     let currentInputMode = 'normal';
-    let lastProblemText = ""; // 連続同一問題防止用
+
+    // 直近10問の重複防止用キュー（FIFO）
+    const RECENT_HISTORY_SIZE = 10;
+    let recentProblemsHistory = [];
 
     // 成績データ管理
     let studentStats = JSON.parse(localStorage.getItem('math_trace_stats') || '{}');
@@ -394,12 +397,14 @@
     function setUnit(uId) {
       currentUnit = uId;
       currentStep = 1;
+      recentProblemsHistory = []; // 単元切り替え時は履歴リセット
       renderUI();
       startProblem();
     }
 
     function setStep(sId) {
       currentStep = sId;
+      recentProblemsHistory = []; // ステップ切り替え時は履歴リセット
       renderUI();
       startProblem();
     }
@@ -411,6 +416,7 @@
       if (!intChk && !fracChk && !decChk) {
         document.getElementById('type-int').checked = true; // 最低1つは維持
       }
+      recentProblemsHistory = [];
       startProblem();
     }
 
@@ -629,19 +635,19 @@
           a = res.html; raw = res.raw;
         }
       } else if (step === 4) {
-        const base = randInt(2, 5); const exp = randInt(2, 3); const isMinusOutside = Math.random() < 0.5;
+        const base = randInt(2, 6); const exp = randInt(2, 3); const isMinusOutside = Math.random() < 0.5;
         q = isMinusOutside ? `-${base}<sup>${exp}</sup>` : `(-${base})<sup>${exp}</sup>`;
         a = isMinusOutside ? `-${Math.pow(base, exp)}` : `${Math.pow(-base, exp)}`;
         raw = a;
         h = "かっこの外に指数があるか、中にあるかに注意しましょう。";
       } else if (step === 5 || step === 6) {
-        const n1 = randInt(-5, 5); const n2 = randInt(-5, 5); const n3 = randInt(-5, 5);
+        const n1 = randInt(-7, 7); const n2 = randInt(-6, 6); const n3 = randInt(-6, 6);
         q = `${n1} + (${n2}) × (${n3})`; a = `${n1 + n2 * n3}`; raw = a;
         h = "かけ算・わり算を先に計算します。";
       } else if (step === 7) {
-        const primes = [2, 3, 5];
-        const counts = [randInt(0,3,false), randInt(0,2,false), randInt(0,1,false)];
-        if (counts[0]===0 && counts[1]===0 && counts[2]===0) counts[0] = 2;
+        const primes = [2, 3, 5, 7];
+        const counts = [randInt(0,3,false), randInt(0,2,false), randInt(0,1,false), randInt(0,1,false)];
+        if (counts[0]===0 && counts[1]===0 && counts[2]===0 && counts[3]===0) counts[0] = 2;
         let val = 1; let ansStr = []; let rawArr = [];
         counts.forEach((c, i) => {
           if(c > 0) { 
@@ -658,17 +664,18 @@
     // --- 【単元2：文字式】 ---
     function generateUnit2(step) {
       if (step === 1) {
-        const coeff = pick([-1, 1, randInt(-5,5)]);
-        return { questionHTML: `y × (${coeff}) × x`, answerHTML: coeff === 1 ? "xy" : coeff === -1 ? "-xy" : `${coeff}xy` };
+        const coeff = pick([-1, 1, randInt(-7,7)]);
+        const vars = pick([['x', 'y'], ['a', 'b'], ['x', 'z']]);
+        return { questionHTML: `${vars[1]} × (${coeff}) × ${vars[0]}`, answerHTML: coeff === 1 ? `${vars[0]}${vars[1]}` : coeff === -1 ? `-${vars[0]}${vars[1]}` : `${coeff}${vars[0]}${vars[1]}` };
       } else if (step === 2) {
-        const a=randInt(-5,5); const b=randInt(-5,5); const c=randInt(-5,5); const d=randInt(-5,5);
+        const a=randInt(-7,7); const b=randInt(-8,8); const c=randInt(-7,7); const d=randInt(-8,8);
         return { questionHTML: `(${formatLinear(a,b)}) - (${formatLinear(c,d)})`, answerHTML: formatLinear(a-c, b-d) };
       } else if (step === 3) {
-        const k=randInt(-5,5); const a=randInt(-5,5); const b=randInt(-5,5);
+        const k=randInt(-6,6); const a=randInt(-6,6); const b=randInt(-7,7);
         return { questionHTML: `${k}(${formatLinear(a,b)})`, answerHTML: formatLinear(k*a, k*b) };
       } else if (step === 4) {
-        const m=randInt(2,4); let n; do { n = randInt(2,5); } while(n === m);
-        const a=randInt(-3,3); const b=randInt(-3,3); const c=randInt(-3,3); const d=randInt(-3,3);
+        const m=randInt(2,5); let n; do { n = randInt(2,6); } while(n === m);
+        const a=randInt(-4,4); const b=randInt(-5,5); const c=randInt(-4,4); const d=randInt(-5,5);
         const L = lcm(m, n); const m1=L/m; const m2=L/n;
         const topX = a*m1 + c*m2; const topC = b*m1 + d*m2;
         const g = gcd(gcd(topX, topC), L);
@@ -680,10 +687,10 @@
         };
       } else if (step === 5) {
         const patterns = [
-          () => { const n1=randInt(2,5); const pay=1000; return { q: `1本 a 円の鉛筆 ${n1}本を買い、${pay}円出したときのおつりは y 円だった。`, a: `${pay} - ${n1}a = y` }; },
-          () => { const v=pick([40,50,60]); return { q: `x mの道のりを分速 ${v} mで進んだら y 分かかった。`, a: makeFracHTML("x", v) + " = y", raw: `x/${v}=y` }; },
-          () => { const c=randInt(3,6); const p=500; return { q: `${p}円持って行き、1個 x 円のパンを${c}個買おうとしたが足りなかった。`, a: `${c}x > ${p}` }; },
-          () => { const r=20; return { q: `定価 x 円の品を ${r}％引きで買った代金は y 円だった。`, a: `0.8x = y` }; }
+          () => { const n1=randInt(2,6); const pay=pick([1000, 2000, 500]); return { q: `1本 a 円の鉛筆 ${n1}本を買い、${pay}円出したときのおつりは y 円だった。`, a: `${pay} - ${n1}a = y` }; },
+          () => { const v=pick([40,50,60,70,80]); return { q: `x mの道のりを分速 ${v} mで進んだら y 分かかった。`, a: makeFracHTML("x", v) + " = y", raw: `x/${v}=y` }; },
+          () => { const c=randInt(3,7); const p=pick([500, 800, 1000]); return { q: `${p}円持って行き、1個 x 円のパンを${c}個買おうとしたが足りなかった。`, a: `${c}x > ${p}` }; },
+          () => { const r=pick([10, 20, 30]); const rate = (100 - r) / 100; return { q: `定価 x 円の品を ${r}％引きで買った代金は y 円だった。`, a: `${rate}x = y` }; }
         ];
         const p = pick(patterns)();
         return { questionHTML: p.q + " (等式・不等式で表せ)", answerHTML: p.a, answerRaw: p.raw || p.a, hint: "文章通りに式を組み立てます。" };
@@ -692,43 +699,94 @@
 
     // --- 【単元3：一次方程式】 ---
     function generateUnit3(step) {
-      const ansX = randInt(-6, 6);
+      const ansX = randInt(-8, 8);
       if (step === 1) {
-        const a = randInt(-8,8); return { questionHTML: formatLinear(1, a) + ` = ${ansX + a}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
+        const a = randInt(-9,9); return { questionHTML: formatLinear(1, a) + ` = ${ansX + a}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
       } else if (step === 2) {
-        const a=randInt(-5,5); let c; do { c = randInt(-5,5); } while(c === a); const b=randInt(-5,5);
+        const a=randInt(-6,6); let c; do { c = randInt(-6,6); } while(c === a); const b=randInt(-8,8);
         return { questionHTML: `${formatLinear(a,b)} = ${formatLinear(c, a*ansX+b-c*ansX)}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
       } else if (step === 3) {
-        const k=randInt(-4,4); const a=randInt(-5,5); let c; do { c = randInt(-4,4); } while(c === k);
+        const k=randInt(-5,5); const a=randInt(-6,6); let c; do { c = randInt(-5,5); } while(c === k);
         return { questionHTML: `${k}(${formatLinear(1,a)}) = ${formatLinear(c, k*(ansX+a)-c*ansX)}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
       } else if (step === 4) {
-        const m=2; const n=3; const k1=randInt(-3,3); const k2=k1; 
+        const m=randInt(2,4); const n=pick([3,5]); const k1=randInt(-4,4); const k2=k1; 
         const a = k1*m - ansX; const b = k2*n - 2*ansX;
         return { questionHTML: `${makeFracHTML(formatLinear(1,a),m)} = ${makeFracHTML(formatLinear(2,b),n)}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}` };
       } else if (step === 5) {
-        const ans = randInt(1, 4) * 3;
-        return { questionHTML: `3 : 2 = x : ${ans*2/3}`, answerHTML: `x = ${ans}`, answerRaw: `${ans}` };
+        const r1 = pick([2, 3, 4, 5]);
+        const r2 = pick([3, 5, 7]);
+        const mult = randInt(1, 5);
+        const ans = r1 * mult;
+        return { questionHTML: `${r1} : ${r2} = x : ${r2 * mult}`, answerHTML: `x = ${ans}`, answerRaw: `${ans}` };
       } else if (step === 6) {
         const patterns = [
-          () => { const x=randInt(3,7); const total=10; const aP=120; const oP=80; return { q: `1個${aP}円のりんごと1個${oP}円のみかんを合わせて${total}個買い、代金は${aP*x + oP*(total-x)}円でした。りんごは何個？`, a: `${x} 個`, raw: `${x}` }; },
-          () => { const x=randInt(10,20); const p1=3; const p2=4; const extra=5; return { q: `アメを1人に${p1}個配ると${extra}個余り、${p2}個配ると不足した。人数は？`, a: `${x} 人`, raw: `${x}` }; },
-          () => { const ans=10; const v1=60; const v2=90; const d=5; return { q: `弟が分速${v1}mで出発し、その${d}分後に兄が分速${v2}mで追いかけた。兄は何分後に追いつく？`, a: `${ans} 分後`, raw: `${ans}` }; }
+          () => { 
+            const x = randInt(3, 8); 
+            const total = randInt(10, 16); 
+            const aP = pick([120, 150, 180]); 
+            const oP = pick([70, 80, 90]); 
+            return { 
+              q: `1個${aP}円のりんごと1個${oP}円のみかんを合わせて${total}個買い、代金は${aP*x + oP*(total-x)}円でした。りんごは何個？`, 
+              a: `${x} 個`, 
+              raw: `${x}`,
+              hint: `りんごを x 個とすると、みかんは (${total} - x) 個と表せます。`
+            }; 
+          },
+          () => { 
+            const x = randInt(5, 16); 
+            const p1 = randInt(3, 5); 
+            const p2 = p1 + randInt(1, 2); 
+            const extra = randInt(2, 9); 
+            const totalCandies = p1 * x + extra; 
+            const shortage = p2 * x - totalCandies; 
+            return { 
+              q: `子どもたちにアメを1人${p1}個ずつ配ると${extra}個余り、1人${p2}個ずつ配ると${shortage}個不足しました。子どもの人数は何人ですか。`, 
+              a: `${x} 人`, 
+              raw: `${x}`,
+              hint: `子どもの人数を x 人とすると、アメの総数は ${p1}x + ${extra} または ${p2}x - ${shortage} と表せます。` 
+            }; 
+          },
+          () => { 
+            const ans = randInt(6, 18); 
+            const v1 = pick([50, 60, 70]); 
+            const v2 = v1 + 30; 
+            const diffV = v2 - v1; // 30
+            // 割り切れるように d を逆算
+            const evenAns = (ans * diffV) % v1 === 0 ? ans : ans * 2;
+            const finalD = (evenAns * diffV) / v1;
+            return { 
+              q: `弟が分速${v1}mで家を出発し、その${finalD}分後に兄が分速${v2}mで追いかけました。兄は何分後に弟に追いつきますか。`, 
+              a: `${evenAns} 分後`, 
+              raw: `${evenAns}`,
+              hint: `兄が追いつくまでの時間を x 分とすると、弟が進んだ時間は (x + ${finalD}) 分となります。道のりが等しいことから方程式を立てます。` 
+            }; 
+          }
         ];
         const p = pick(patterns)();
-        return { questionHTML: p.q, answerHTML: p.a, answerRaw: p.raw, hint: "求めるものを x として方程式を立てます。" };
+        return { questionHTML: p.q, answerHTML: p.a, answerRaw: p.raw, hint: p.hint || "求めるものを x として方程式を立てます。" };
       }
     }
 
-    function getProblem() {
+    // 問題取得関数（直近10問の間でまったく同じ式・数字が出ないよう制御）
+    function getProblem(excludedList = null) {
       let p;
       let loopCount = 0;
+      const history = excludedList || recentProblemsHistory;
+
       do {
         if (currentUnit === 1) p = generateUnit1(currentStep);
         else if (currentUnit === 2) p = generateUnit2(currentStep);
         else p = generateUnit3(currentStep);
         loopCount++;
-      } while (p.questionHTML === lastProblemText && loopCount < 5);
-      lastProblemText = p.questionHTML;
+      } while (history.includes(p.questionHTML) && loopCount < 30);
+
+      // 直近履歴キューに追加（通常モード時のみ）
+      if (!excludedList) {
+        recentProblemsHistory.push(p.questionHTML);
+        if (recentProblemsHistory.length > RECENT_HISTORY_SIZE) {
+          recentProblemsHistory.shift(); // 10問を超えた古い履歴を破棄
+        }
+      }
 
       const qDisp = document.getElementById("question-display");
       if (p.questionHTML.length > 30) {
@@ -1156,8 +1214,12 @@
       qContainer.innerHTML = "";
       aContainer.innerHTML = "";
 
+      const printHistory = [];
+
       for (let i = 1; i <= count; i++) {
-        const p = getProblem();
+        // 同一プリント内で重複が出ないように個別履歴を渡す
+        const p = getProblem(printHistory);
+        printHistory.push(p.questionHTML);
         
         const qDiv = document.createElement("div");
         qDiv.className = "problem-item flex items-start text-base sm:text-lg";
