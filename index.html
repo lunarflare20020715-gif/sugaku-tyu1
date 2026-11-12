@@ -181,6 +181,78 @@
       font-weight: 700;
     }
 
+    /* 数種フィルター（スモールステップ用） */
+    .num-type-filter {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .filter-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .filter-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+    .q-count-selector {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--key-bg);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .q-count-btn {
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--text-sub);
+      transition: all 0.15s;
+    }
+    .q-count-btn.active {
+      background: var(--primary);
+      color: #FFFFFF;
+    }
+
+    /* 進捗ステータスバー */
+    .quiz-progress-bar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
     /* メイン問題カード */
     .card {
       background: var(--card-bg);
@@ -518,13 +590,6 @@
         font-size: 1.15rem;
       }
       .print-item-q {
-
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        font-size: 1.15rem;
-      }
-      .print-item-q {
         font-weight: 600;
         line-height: 1.5;
       }
@@ -579,8 +644,33 @@
     <!-- ステップ選択グリッド -->
     <div class="step-grid" id="stepGrid"></div>
 
+    <!-- 数種フィルター（整数・小数・分数）＆ 問題数選択（10問 / 20問） -->
+    <div class="num-type-filter" id="numTypeFilter">
+      <div class="filter-group">
+        <span style="font-size:0.78rem; color:var(--text-sub);">タイプ:</span>
+        <label class="filter-label">
+          <input type="checkbox" id="chkInteger" checked onchange="onFilterChange()"> 整数
+        </label>
+        <label class="filter-label">
+          <input type="checkbox" id="chkDecimal" checked onchange="onFilterChange()"> 小数
+        </label>
+        <label class="filter-label">
+          <input type="checkbox" id="chkFraction" checked onchange="onFilterChange()"> 分数
+        </label>
+      </div>
+      <div class="q-count-selector">
+        <button class="q-count-btn active" id="btnCount10" onclick="setQuestionLimit(10)">10問</button>
+        <button class="q-count-btn" id="btnCount20" onclick="setQuestionLimit(20)">20問</button>
+      </div>
+    </div>
+
     <!-- メイン問題カード -->
     <div class="card">
+      <div class="quiz-progress-bar">
+        <span id="progressText">第 1 / 10 問</span>
+        <span id="currentScoreText">現在の得点: 0 点</span>
+      </div>
+
       <div class="result-mark" id="resultMark">〇</div>
 
       <div class="question-box" id="questionDisplay">問題を読み込み中...</div>
@@ -599,6 +689,7 @@
         <!-- 小さな補助タブ -->
         <div class="input-mode-subbar">
           <button class="sub-btn" id="fracModeBtn" onclick="toggleFractionMode()">分数モード</button>
+          <button class="sub-btn" onclick="insertSymbol('.')">. (小数点)</button>
           <button class="sub-btn" onclick="insertSymbol('²')">² (2乗)</button>
           <button class="sub-btn" onclick="insertSymbol('/')">/ (分数)</button>
         </div>
@@ -658,6 +749,19 @@
     </div>
   </div>
 
+  <!-- テスト結果発表モーダル（10問/20問終了時） -->
+  <div class="modal-overlay" id="quizResultModal" onclick="closeQuizResult(event)">
+    <div class="modal-content" style="text-align:center;" onclick="event.stopPropagation()">
+      <div style="font-size:0.95rem; font-weight:700; color:var(--text-sub);" id="resultUnitTitle">単元テスト結果</div>
+      <div style="font-size:3.2rem; font-weight:900; color:var(--primary); margin:12px 0;">
+        <span id="finalScoreNum">100</span><span style="font-size:1.3rem; color:var(--text-main);"> 点 / 100点</span>
+      </div>
+      <div id="finalDetailText" style="font-size:1rem; font-weight:600; color:var(--text-main); margin-bottom:8px;"></div>
+      <div id="finalCommentText" style="font-size:0.9rem; color:var(--text-sub); margin-bottom:20px;"></div>
+      <button class="key-btn key-action" style="width:100%; padding:12px; font-size:1.05rem;" onclick="startNewQuizSession()">もう一度挑戦する 🚀</button>
+    </div>
+  </div>
+
   <!-- A4プリント印刷用エリア（画面には非表示、印刷時のみ展開） -->
   <div id="printArea"></div>
 
@@ -671,6 +775,64 @@
     let isFractionMode = false;
     let activeField = null; // 現在フォーカスのある入力欄
     let isAnswerChecked = false;
+
+    // 10問 / 20問 テストセッション管理
+    let targetQuestionCount = 10;
+    let sessionQuestionIndex = 1;
+    let sessionCorrectCount = 0;
+
+    function setQuestionLimit(count) {
+      targetQuestionCount = count;
+      document.getElementById('btnCount10').classList.toggle('active', count === 10);
+      document.getElementById('btnCount20').classList.toggle('active', count === 20);
+      startNewQuizSession();
+    }
+
+    function startNewQuizSession() {
+      sessionQuestionIndex = 1;
+      sessionCorrectCount = 0;
+      document.getElementById('quizResultModal').style.display = 'none';
+      updateProgressUI();
+      loadProblem();
+    }
+
+    function updateProgressUI() {
+      const pointPerQ = 100 / targetQuestionCount;
+      const currentScore = Math.round(sessionCorrectCount * pointPerQ);
+      document.getElementById('progressText').innerText = `第 ${sessionQuestionIndex} / ${targetQuestionCount} 問`;
+      document.getElementById('currentScoreText').innerText = `得点: ${currentScore} 点 (1問${pointPerQ}点)`;
+    }
+
+    function closeQuizResult(e) {
+      if (e) e.stopPropagation();
+      startNewQuizSession();
+    }
+
+    // 数種フィルター状態
+    let activeNumberTypes = ['int', 'dec', 'frac'];
+
+    function onFilterChange() {
+      const cInt = document.getElementById('chkInteger').checked;
+      const cDec = document.getElementById('chkDecimal').checked;
+      const cFrac = document.getElementById('chkFraction').checked;
+
+      // すべて外れた場合は強制的に整数をONに戻す（0問防止）
+      if (!cInt && !cDec && !cFrac) {
+        document.getElementById('chkInteger').checked = true;
+      }
+
+      activeNumberTypes = [];
+      if (document.getElementById('chkInteger').checked) activeNumberTypes.push('int');
+      if (document.getElementById('chkDecimal').checked) activeNumberTypes.push('dec');
+      if (document.getElementById('chkFraction').checked) activeNumberTypes.push('frac');
+
+      startNewQuizSession();
+    }
+
+    function getSelectedNumberType() {
+      if (activeNumberTypes.length === 0) return 'int';
+      return pick(activeNumberTypes);
+    }
 
     // ローカル成績
     let userStats = {
@@ -779,7 +941,7 @@
       if (unitKey === 'unit2_mojishiki') document.getElementById('btn-u2').classList.add('active');
       if (unitKey === 'unit3_hoteishiki') document.getElementById('btn-u3').classList.add('active');
       renderSteps();
-      loadProblem();
+      startNewQuizSession();
     }
 
     function renderSteps() {
@@ -793,7 +955,7 @@
         btn.onclick = () => {
           currentStep = i;
           renderSteps();
-          loadProblem();
+          startNewQuizSession();
         };
         grid.appendChild(btn);
       }
@@ -883,30 +1045,101 @@
     // 単元1：正負の数と素因数分解
     // ==========================================
     function generateUnit1Problem(step) {
+      const nType = getSelectedNumberType();
+
       if (step === 1) {
-        const a = randInt(-15, 15); const b = randInt(-15, 15);
-        const ans = a + b;
-        const bStr = b < 0 ? `- ${Math.abs(b)}` : `+ ${b}`;
-        return { questionHTML: `${a} ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "符号に注意して数直線で考えましょう。" };
-      } else if (step === 2) {
-        const a = randInt(-12, 12); const b = randInt(-12, 12);
-        const isSub = Math.random() < 0.5;
-        const ans = isSub ? a - b : a + b;
-        const aStr = a < 0 ? `(${a})` : `${a}`;
-        const bStr = b < 0 ? `(${b})` : `${b}`;
-        return { questionHTML: `${aStr} ${isSub ? '-' : '+'} ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "ひき算は後ろの符号を変えてたし算にします。" };
-      } else if (step === 3) {
-        const isDiv = Math.random() < 0.5;
-        if (isDiv) {
-          const b = randInt(-9, 9, true); const ans = randInt(-9, 9);
-          const a = b * ans;
-          const aStr = a < 0 ? `(${a})` : `${a}`; const bStr = b < 0 ? `(${b})` : `${b}`;
-          return { questionHTML: `${aStr} ÷ ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "同符号は＋、異符号は－になります。" };
+        if (nType === 'dec') {
+          const a = (randInt(-90, 90, true) / 10).toFixed(1);
+          const b = (randInt(-90, 90, true) / 10).toFixed(1);
+          const ans = (parseFloat(a) + parseFloat(b)).toFixed(1).replace(/\.0$/, "");
+          const bStr = parseFloat(b) < 0 ? `- ${Math.abs(b)}` : `+ ${b}`;
+          return { questionHTML: `${a} ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "小数の位をそろえて符号に注意して足し引きします。" };
+        } else if (nType === 'frac') {
+          const den = pick([2, 3, 4, 5, 6]);
+          const numA = randInt(-8, 8, true);
+          const numB = randInt(-8, 8, true);
+          const sumNum = numA + numB;
+          const common = gcd(sumNum, den);
+          const fNum = sumNum / common;
+          const fDen = den / common;
+          let ansHTML = fDen === 1 ? `${fNum}` : makeFracHTML(fNum, fDen);
+          let ansRaw = fDen === 1 ? `${fNum}` : `${fNum}/${fDen}`;
+          const bOp = numB < 0 ? `- ${makeFracHTML(Math.abs(numB), den)}` : `+ ${makeFracHTML(numB, den)}`;
+          return {
+            questionHTML: `${makeFracHTML(numA, den)} ${bOp}`,
+            answerHTML: ansHTML,
+            answerRaw: ansRaw,
+            hint: "同分母の計算です。分子どうしを足し引きして、必要なら約分します。"
+          };
         } else {
-          const a = randInt(-9, 9, true); const b = randInt(-9, 9, true);
-          const ans = a * b;
-          const aStr = a < 0 ? `(${a})` : `${a}`; const bStr = b < 0 ? `(${b})` : `${b}`;
-          return { questionHTML: `${aStr} × ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "同符号のかけ算は＋、異符号のかけ算は－です。" };
+          const a = randInt(-15, 15); const b = randInt(-15, 15);
+          const ans = a + b;
+          const bStr = b < 0 ? `- ${Math.abs(b)}` : `+ ${b}`;
+          return { questionHTML: `${a} ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "符号に注意して数直線で考えましょう。" };
+        }
+      } else if (step === 2) {
+        if (nType === 'dec') {
+          const a = (randInt(-80, 80, true) / 10).toFixed(1);
+          const b = (randInt(-80, 80, true) / 10).toFixed(1);
+          const isSub = Math.random() < 0.5;
+          const ans = isSub ? (parseFloat(a) - parseFloat(b)).toFixed(1).replace(/\.0$/, "") : (parseFloat(a) + parseFloat(b)).toFixed(1).replace(/\.0$/, "");
+          const aStr = parseFloat(a) < 0 ? `(${a})` : `${a}`;
+          const bStr = parseFloat(b) < 0 ? `(${b})` : `${b}`;
+          return { questionHTML: `${aStr} ${isSub ? '-' : '+'} ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "かっこを外して符号を整理してから計算します。" };
+        } else if (nType === 'frac') {
+          const den = pick([3, 4, 5, 6]);
+          const numA = randInt(-6, 6, true);
+          const numB = randInt(-6, 6, true);
+          const isSub = Math.random() < 0.5;
+          const sumNum = isSub ? numA - numB : numA + numB;
+          const common = gcd(sumNum, den);
+          const fNum = sumNum / common;
+          const fDen = den / common;
+          let ansHTML = fDen === 1 ? `${fNum}` : makeFracHTML(fNum, fDen);
+          let ansRaw = fDen === 1 ? `${fNum}` : `${fNum}/${fDen}`;
+          const aStr = `(${makeFracHTML(numA, den)})`;
+          const bStr = `(${makeFracHTML(numB, den)})`;
+          return { questionHTML: `${aStr} ${isSub ? '-' : '+'} ${bStr}`, answerHTML: ansHTML, answerRaw: ansRaw, hint: "ひき算は後ろのかっこの符号を変えてたし算にします。" };
+        } else {
+          const a = randInt(-12, 12); const b = randInt(-12, 12);
+          const isSub = Math.random() < 0.5;
+          const ans = isSub ? a - b : a + b;
+          const aStr = a < 0 ? `(${a})` : `${a}`;
+          const bStr = b < 0 ? `(${b})` : `${b}`;
+          return { questionHTML: `${aStr} ${isSub ? '-' : '+'} ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "ひき算は後ろの符号を変えてたし算にします。" };
+        }
+      } else if (step === 3) {
+        if (nType === 'dec') {
+          const a = (randInt(-40, 40, true) / 10).toFixed(1);
+          const b = randInt(-5, 5, true);
+          const ans = (parseFloat(a) * b).toFixed(1).replace(/\.0$/, "");
+          const aStr = parseFloat(a) < 0 ? `(${a})` : `${a}`;
+          const bStr = b < 0 ? `(${b})` : `${b}`;
+          return { questionHTML: `${aStr} × ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "小数のかけ算は小数点の位置に注意しましょう。" };
+        } else if (nType === 'frac') {
+          const numA = randInt(-4, 4, true); const denA = randInt(2, 5);
+          const numB = randInt(-4, 4, true); const denB = randInt(2, 5);
+          const top = numA * numB; const bottom = denA * denB;
+          const common = gcd(top, bottom);
+          const fNum = top / common; const fDen = bottom / common;
+          let ansHTML = fDen === 1 ? `${fNum}` : makeFracHTML(fNum, fDen);
+          let ansRaw = fDen === 1 ? `${fNum}` : `${fNum}/${fDen}`;
+          const aStr = `(${makeFracHTML(numA, denA)})`;
+          const bStr = `(${makeFracHTML(numB, denB)})`;
+          return { questionHTML: `${aStr} × ${bStr}`, answerHTML: ansHTML, answerRaw: ansRaw, hint: "分数のかけ算は分子どうし、分母どうしをかけます。" };
+        } else {
+          const isDiv = Math.random() < 0.5;
+          if (isDiv) {
+            const b = randInt(-9, 9, true); const ans = randInt(-9, 9);
+            const a = b * ans;
+            const aStr = a < 0 ? `(${a})` : `${a}`; const bStr = b < 0 ? `(${b})` : `${b}`;
+            return { questionHTML: `${aStr} ÷ ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "同符号は＋、異符号は－になります。" };
+          } else {
+            const a = randInt(-9, 9, true); const b = randInt(-9, 9, true);
+            const ans = a * b;
+            const aStr = a < 0 ? `(${a})` : `${a}`; const bStr = b < 0 ? `(${b})` : `${b}`;
+            return { questionHTML: `${aStr} × ${bStr}`, answerHTML: `${ans}`, answerRaw: `${ans}`, hint: "同符号のかけ算は＋、異符号のかけ算は－です。" };
+          }
         }
       } else if (step === 4) {
         const base = randInt(-5, 5, true); const exp = randInt(2, 3);
@@ -1015,192 +1248,479 @@
     // 単元2：文字式
     // ==========================================
     function generateUnit2Problem(step) {
+      const nType = getSelectedNumberType();
+
       if (step === 1) {
-        const p = randInt(1, 3);
-        if (p === 1) {
-          const coeff = pick([-1, 1, 2, 3, -3, 4, -4, 5]);
-          const cStr = coeff < 0 ? `(${coeff})` : `${coeff}`;
-          const q = Math.random() < 0.5 ? `y × ${cStr} × x` : `x × ${cStr} × y`;
-          const ans = coeff === 1 ? "xy" : coeff === -1 ? "-xy" : `${coeff}xy`;
-          return { questionHTML: q, answerHTML: ans, answerRaw: ans, hint: "数字を先頭にして、文字はアルファベット順に並べます。" };
-        } else if (p === 2) {
-          const coeff = pick([2, 3, -2, -3, 4, 5]);
-          const cStr = coeff < 0 ? `(${coeff})` : `${coeff}`;
-          return {
-            questionHTML: `a × ${cStr} × b × a`,
-            answerHTML: `${coeff}a<sup>2</sup>b`,
-            answerRaw: `${coeff}a^2b|${coeff}a²b|${coeff}a2b`,
-            hint: "同じ文字のかけ算は指数（2乗）で表します。"
-          };
+        // 表し方のルール（整数・小数・分数フィルター連動）
+        if (nType === 'dec') {
+          const p = randInt(1, 2);
+          const decs = ["-0.1", "0.1", "-0.5", "0.5", "-1.5", "1.5", "-2.5", "2.5", "-0.2", "0.8"];
+          const c = pick(decs);
+          const cStr = parseFloat(c) < 0 ? `(${c})` : `${c}`;
+          if (p === 1) {
+            const q = Math.random() < 0.5 ? `y × ${cStr} × x` : `x × ${cStr} × y`;
+            return {
+              questionHTML: q,
+              answerHTML: `${c}xy`,
+              answerRaw: `${c}xy`,
+              hint: "小数の場合、0.1や-0.1の「1」は省略せずに 0.1xy のように書きます。"
+            };
+          } else {
+            const q = `a × ${cStr} × b × a`;
+            return {
+              questionHTML: q,
+              answerHTML: `${c}a<sup>2</sup>b`,
+              answerRaw: `${c}a^2b`,
+              hint: "数字（小数）を先頭にし、同じ文字の積は累乗の指数で表します。"
+            };
+          }
+        } else if (nType === 'frac') {
+          const p = randInt(1, 3);
+          const b = randInt(2, 9);
+          if (p === 1) {
+            // x ÷ b
+            return {
+              questionHTML: `x ÷ ${b}`,
+              answerHTML: makeFracHTML("x", b),
+              answerRaw: `x/${b}`,
+              hint: "割り算は ÷ を使わずに分数の形で表します。"
+            };
+          } else if (p === 2) {
+            // (x + c) ÷ b
+            const c = randInt(-7, 7, true);
+            const expr = formatLinear(1, c, "x");
+            return {
+              questionHTML: `(${expr}) ÷ ${b}`,
+              answerHTML: makeFracHTML(expr, b),
+              answerRaw: `(${expr})/${b}`.replace(/\s+/g, ""),
+              hint: "かっこ全体が分子に乗るときは、カッコを省いて分子にそのまま書きます。"
+            };
+          } else {
+            // 分数の積 x × (a/b) × y
+            const den = pick([2, 3, 5, 7]);
+            const num = pick([1, 2, 4]);
+            if (num >= den) return generateUnit2Problem(1);
+            const isNeg = Math.random() < 0.4;
+            const sign = isNeg ? "-" : "";
+            const fHTML = isNeg ? `(-${makeFracHTML(num, den)})` : makeFracHTML(num, den);
+            const ansNum = num === 1 ? "xy" : `${num}xy`;
+            return {
+              questionHTML: `y × ${fHTML} × x`,
+              answerHTML: `${sign}${makeFracHTML(ansNum, den)}`,
+              answerRaw: `${sign}(${ansNum})/${den}|${sign}${ansNum}/${den}|${sign}${num}/${den}xy`,
+              hint: "分数の係数を前に出し、文字をアルファベット順に並べます。"
+            };
+          }
         } else {
-          const b = randInt(2, 8);
-          return {
-            questionHTML: `x ÷ ${b}`,
-            answerHTML: makeFracHTML("x", b),
-            answerRaw: `x/${b}`,
-            hint: "わり算は分数の形で表します。"
-          };
+          // 整数のみ選択時：分数の商を出さず、積の表し方・累乗に集中
+          const p = randInt(1, 2);
+          if (p === 1) {
+            const coeff = pick([-1, 1, randInt(-8, 8, true)]);
+            const cStr = coeff < 0 ? `(${coeff})` : `${coeff}`;
+            const q = Math.random() < 0.5 ? `y × ${cStr} × x` : `x × ${cStr} × y`;
+            const ans = coeff === 1 ? "xy" : coeff === -1 ? "-xy" : `${coeff}xy`;
+            return { questionHTML: q, answerHTML: ans, answerRaw: ans, hint: "数字を先頭にし、文字はアルファベット順に並べます。1や-1の1は省きます。" };
+          } else {
+            const coeff = randInt(-5, 5, true);
+            const cStr = coeff < 0 ? `(${coeff})` : `${coeff}`;
+            const q = `a × ${cStr} × b × a`;
+            const ansH = coeff === 1 ? "a<sup>2</sup>b" : coeff === -1 ? "-a<sup>2</sup>b" : `${coeff}a<sup>2</sup>b`;
+            const ansR = coeff === 1 ? "a^2b" : coeff === -1 ? "-a^2b" : `${coeff}a^2b`;
+            return { questionHTML: q, answerHTML: ansH, answerRaw: ansR, hint: "同じ文字の積は累乗（2乗など）を使って表します。" };
+          }
         }
       } else if (step === 2) {
-        const a = randInt(-6, 6, true); const b = randInt(-8, 8);
-        const c = randInt(-6, 6, true); const d = randInt(-8, 8);
-        const e1 = formatLinear(a, b, "x");
-        const e2 = formatLinear(c, d, "x");
+        // ステップ2：1次式の加減（整数・小数・分数フィルター対応）
         const isSub = Math.random() < 0.5;
-        const ans = formatLinear(isSub ? a - c : a + c, isSub ? b - d : b + d, "x");
-        return {
-          questionHTML: `(${e1}) ${isSub ? '-' : '+'} (${e2})`,
-          answerHTML: ans,
-          answerRaw: ans.replace(/\s+/g, ""),
-          hint: isSub ? "ひき算はかっこ内の符号を反転して同類項をまとめます。" : "同類項どうしをまとめます。"
-        };
-      } else if (step === 3) {
-        const k = pick([-4, -3, -2, 2, 3, 4]);
-        const a = randInt(-4, 4, true); const b = randInt(-6, 6);
-        const inner = formatLinear(a, b, "x");
-        const ans = formatLinear(k * a, k * b, "x");
-        return {
-          questionHTML: `${k}(${inner})`,
-          answerHTML: ans,
-          answerRaw: ans.replace(/\s+/g, ""),
-          hint: "分配法則でかっこの中のすべての項にかけます。"
-        };
-      } else if (step === 4) {
-        const m = randInt(2, 4);
-        let n = randInt(2, 5);
-        if (n === m) n = 5;
-        const a = randInt(1, 3); const b = randInt(-3, 3);
-        const c = randInt(1, 3); const d = randInt(-3, 3);
-        const L = lcm(m, n);
-        const totalX = a * (L/m) + c * (L/n);
-        const totalC = b * (L/m) + d * (L/n);
-        const numStr = formatLinear(totalX, totalC, "x");
-        return {
-          questionHTML: `${makeFracHTML(formatLinear(a,b,"x"), m)} + ${makeFracHTML(formatLinear(c,d,"x"), n)}`,
-          answerHTML: makeFracHTML(numStr, L),
-          answerRaw: `(${numStr})/${L}|${numStr}/${L}`,
-          hint: `分母を最小公倍数 ${L} に通分して計算します。`
-        };
-      } else {
-        // ステップ5：文章題（巡回キュー）
-        const type = u2Step5Order[u2Step5Index % u2Step5Order.length];
-        u2Step5Index++;
+        const op = isSub ? "-" : "+";
 
-        if (type === 0) {
-          const money = pick([1000, 2000, 5000]); const num = randInt(3, 6);
-          return {
-            questionHTML: `${money} 円を持って買い物に行き、1個 a 円のリンゴを ${num} 個買ったときのおつりは y 円であった。等式で表しなさい。`,
-            answerHTML: `${money} - ${num}a = y`,
-            answerRaw: `${money}-${num}a=y|y=${money}-${num}a`,
-            hint: "持っていたお金 － 代金 ＝ おつり"
+        if (nType === 'dec') {
+          // 10や-10になると 1.0x になってしまうため、-9〜9（0除く）に制限
+          const a = randInt(-9, 9, true); const b = randInt(-9, 9, true);
+          const c = randInt(-9, 9, true); const d = randInt(-9, 9, true);
+          if (!isSub && a + c === 0 && b + d === 0) return generateUnit2Problem(2);
+          if (isSub && a - c === 0 && b - d === 0) return generateUnit2Problem(2);
+
+          const toDec = (n) => (n / 10).toFixed(1).replace(/\.0$/, "");
+          const fmtDec = (xCoeff, constVal) => {
+            let s = "";
+            if (xCoeff !== 0) {
+              if (xCoeff === 10) s += "x";
+              else if (xCoeff === -10) s += "-x";
+              else s += `${toDec(xCoeff)}x`;
+            }
+            if (constVal !== 0) {
+              const absC = toDec(Math.abs(constVal));
+              if (s === "") s += `${toDec(constVal)}`;
+              else s += constVal > 0 ? ` + ${absC}` : ` - ${absC}`;
+            }
+            return s || "0";
           };
-        } else if (type === 1) {
-          const speed = pick([50, 60, 80]);
+
+          const expr1 = fmtDec(a, b);
+          const expr2 = fmtDec(c, d);
+          const ansX = isSub ? a - c : a + c;
+          const ansC = isSub ? b - d : b + d;
+          const ans = fmtDec(ansX, ansC);
+
           return {
-            questionHTML: `家から駅まで x m の道のりを分速 ${speed} m で歩いたときにかかった時間は y 分であった。等式で表しなさい。`,
-            answerHTML: `${makeFracHTML("x", speed)} = y`,
-            answerRaw: `x/${speed}=y|y=x/${speed}`,
-            hint: "時間 ＝ 道のり ÷ 速さ"
+            questionHTML: `(${expr1}) ${op} (${expr2})`,
+            answerHTML: ans,
+            answerRaw: ans.replace(/\s+/g, ""),
+            hint: "かっこを外して、xの項どうし・小数の項どうしをまとめます。"
           };
-        } else if (type === 2) {
-          const num = randInt(3, 6); const total = pick([500, 800, 1000]);
+        } else if (nType === 'frac') {
+          // 分数の1次式の加減：教科書らしく正の分数同士のたし算・ひき算、またはカッコつき1次式にする
+          const den = pick([2, 3, 4, 5]);
+          const a = randInt(1, 5);
+          const b = randInt(1, 5);
+          const c = randInt(-4, 4, true);
+          const d = randInt(-4, 4, true);
+
+          const ansNum = isSub ? a - b : a + b;
+          if (ansNum === 0) return generateUnit2Problem(2);
+          const common = gcd(ansNum, den);
+          const fNum = ansNum / common; const fDen = den / common;
+
+          // 問題式： (a/den x + c) ± (b/den x + d) またはシンプルに a/den x - b/den x
+          const q1 = `${makeFracHTML(a, den)}x`;
+          const q2 = `${makeFracHTML(b, den)}x`;
+
+          let ansHTML = ""; let ansRaw = "";
+          if (fDen === 1) {
+            ansHTML = formatLinear(fNum, 0, "x");
+            ansRaw = ansHTML;
+          } else {
+            const sign = fNum < 0 ? "-" : "";
+            const absN = Math.abs(fNum);
+            const numPart = absN === 1 ? "x" : `${absN}x`;
+            ansHTML = `${sign}${makeFracHTML(absN, fDen)}x`;
+            ansRaw = `${sign}${numPart}/${fDen}|${sign}(${numPart})/${fDen}|${sign}${absN}/${fDen}x`;
+          }
+
           return {
-            questionHTML: `1個 x 円のノートを ${num} 冊買おうとしたが、持っていた ${total} 円では足りなかった。不等式で表しなさい。`,
-            answerHTML: `${num}x &gt; ${total}`,
-            answerRaw: `${num}x>${total}|${total}<${num}x`,
-            hint: "代金 ＞ 持っていたお金"
-          };
-        } else if (type === 3) {
-          const disc = pick([10, 20, 30]); const rate = (100 - disc) / 100;
-          return {
-            questionHTML: `定価 x 円の服を ${disc}% 引きで買ったところ、代金は y 円であった。等式で表しなさい。`,
-            answerHTML: `${rate}x = y`,
-            answerRaw: `${rate}x=y|y=${rate}x`,
-            hint: `${disc}%引きは元の値の ${(100-disc)}% になります。`
-          };
-        } else if (type === 4) {
-          const p = randInt(3, 5); const r = randInt(2, 6);
-          return {
-            questionHTML: `x 個のあめを y 人に ${p} 個ずつ配ると ${r} 個余った。等式で表しなさい。`,
-            answerHTML: `x = ${p}y + ${r}`,
-            answerRaw: `x=${p}y+${r}|${p}y+${r}=x`,
-            hint: "あめの総数 ＝ 配った個数 ＋ 余り"
-          };
-        } else if (type === 5) {
-          return {
-            questionHTML: `十の位が x、一の位が y である2桁の自然数を文字式で表しなさい。`,
-            answerHTML: `10x + y`,
-            answerRaw: `10x+y|y+10x`,
-            hint: "十の位の数字を10倍し、一の位の数字をたします。"
-          };
-        } else if (type === 6) {
-          const appleW = 200; const orangeW = 120; const limit = 1500;
-          return {
-            questionHTML: `1個 ${appleW}g のリンゴ a 個と、1個 ${orangeW}g のミカン b 個の合計の重さは ${limit}g 以下である。不等式で表しなさい。`,
-            answerHTML: `${appleW}a + ${orangeW}b ≦ ${limit}`,
-            answerRaw: `${appleW}a+${orangeW}b<=${limit}|${appleW}a+${orangeW}b≦${limit}`,
-            hint: "合計の重さ ≦ 上限の重さ"
-          };
-        } else if (type === 7) {
-          return {
-            questionHTML: `縦の長さが a cm、横の長さが b cm の長方形の周の長さを L cm とする。等式で表しなさい。`,
-            answerHTML: `2(a + b) = L`,
-            answerRaw: `2(a+b)=L|L=2(a+b)|2a+2b=L|L=2a+2b`,
-            hint: "周の長さ ＝ (縦 ＋ 横) × 2"
+            questionHTML: `${q1} ${op} ${q2}`,
+            answerHTML: ansHTML,
+            answerRaw: ansRaw,
+            hint: "分母が同じなので、分子の係数を計算してxをつけます。"
           };
         } else {
+          // 整数： (ax + b) ± (cx + d) または かっこ無し ax + b ± cx ± d
+          const hasParen = Math.random() < 0.65;
+          const a = randInt(-7, 7, true); const b = randInt(-9, 9, true);
+          const c = randInt(-7, 7, true); const d = randInt(-9, 9, true);
+          const expr1 = formatLinear(a, b, "x");
+          const expr2 = formatLinear(c, d, "x");
+
+          if (!hasParen) {
+            // かっこ無しの場合、expr2の先頭が正なら「 + 」、負なら「 - 」で綺麗に繋ぐ
+            const secondTermX = c === 1 ? ` + x` : c === -1 ? ` - x` : c > 0 ? ` + ${c}x` : ` - ${Math.abs(c)}x`;
+            const secondTermC = d > 0 ? ` + ${d}` : ` - ${Math.abs(d)}`;
+            const ans = formatLinear(a + c, b + d, "x");
+            if (ans === "0") return generateUnit2Problem(2);
+            return {
+              questionHTML: `${expr1}${secondTermX}${secondTermC}`,
+              answerHTML: ans,
+              answerRaw: ans.replace(/\s+/g, ""),
+              hint: "文字の項どうし、数の項どうし（同類項）をそれぞれまとめます。"
+            };
+          } else {
+            const ansX = isSub ? a - c : a + c;
+            const ansConst = isSub ? b - d : b + d;
+            if (ansX === 0 && ansConst === 0) return generateUnit2Problem(2);
+            const ans = formatLinear(ansX, ansConst, "x");
+            return {
+              questionHTML: `(${expr1}) ${op} (${expr2})`,
+              answerHTML: ans,
+              answerRaw: ans.replace(/\s+/g, ""),
+              hint: isSub
+                ? "ひき算のかっこを外すときは、後ろのかっこの中の符号をすべて逆にしてからまとめます。"
+                : "たし算のかっこはそのまま外して、同類項をまとめます。"
+            };
+          }
+        }
+      } else if (step === 3) {
+        // ステップ3：1次式と数の乗除（分配法則）
+        if (nType === 'dec') {
+          const k = pick([-0.5, 0.5, -1.5, 1.5, -0.2, 0.2]);
+          const a = pick([-4, -2, 2, 4, 6]);
+          const b = pick([-6, -4, -2, 2, 4, 6]);
+          const inner = formatLinear(a, b, "x");
+          const ans = formatLinear(Math.round(k * a * 10) / 10, Math.round(k * b * 10) / 10, "x");
           return {
-            questionHTML: `長さ x km の道を走ったら、残りの道のりは y m であった。全体の道のり (m) を等式で表しなさい。`,
-            answerHTML: `1000x - y`,
-            answerRaw: `1000x-y`,
-            hint: "1km ＝ 1000m なので、x km ＝ 1000x m です。"
+            questionHTML: `${k}(${inner})`,
+            answerHTML: ans,
+            answerRaw: ans.replace(/\s+/g, ""),
+            hint: `かっこの中のすべての項に ${k} をかけます。`
+          };
+        } else if (nType === 'frac') {
+          const den = pick([2, 3, 4]);
+          const num = pick([1, 2, 3]);
+          if (num >= den) return generateUnit2Problem(3);
+          const isNeg = Math.random() < 0.4;
+          const signedNum = isNeg ? -num : num;
+          const multA = randInt(-3, 3, true);
+          const multB = randInt(-3, 3, true);
+          const a = multA * den;
+          const b = multB * den;
+          const inner = formatLinear(a, b, "x");
+          const ans = formatLinear(multA * signedNum, multB * signedNum, "x");
+          const sign = isNeg ? "-" : "";
+          const fHTML = `${sign}${makeFracHTML(num, den)}`;
+          return {
+            questionHTML: `${fHTML}(${inner})`,
+            answerHTML: ans,
+            answerRaw: ans.replace(/\s+/g, ""),
+            hint: `分母の ${den} と約分しながら、かっこの中の各項にかけます。`
+          };
+        } else {
+          const isDiv = Math.random() < 0.4;
+          if (!isDiv) {
+            const k = pick([-6, -5, -4, -3, -2, 2, 3, 4, 5, 6]);
+            const a = randInt(-5, 5, true);
+            const b = randInt(-7, 7, true);
+            const inner = formatLinear(a, b, "x");
+            const ans = formatLinear(k * a, k * b, "x");
+            return {
+              questionHTML: `${k}(${inner})`,
+              answerHTML: ans,
+              answerRaw: ans.replace(/\s+/g, ""),
+              hint: `かっこの中のすべての項に ${k} をかけます。符号に注意しましょう。`
+            };
+          } else {
+            const k = pick([-5, -4, -3, -2, 2, 3, 4, 5]);
+            const ansX = randInt(-5, 5, true);
+            const ansConst = randInt(-6, 6, true);
+            const expr = formatLinear(ansX * k, ansConst * k, "x");
+            const ans = formatLinear(ansX, ansConst, "x");
+            const kStr = k < 0 ? `(${k})` : `${k}`;
+            return {
+              questionHTML: `(${expr}) ÷ ${kStr}`,
+              answerHTML: ans,
+              answerRaw: ans.replace(/\s+/g, ""),
+              hint: `かっこの中のすべての項を ${k} でわります。`
+            };
+          }
+        }
+      } else if (step === 4) {
+        // ステップ4：分数の形の1次式の計算（通分して分子をまとめる）
+        const m = randInt(2, 4);
+        let n;
+        do { n = randInt(2, 5); } while (n === m);
+
+        const a = randInt(-3, 3, true); const b = randInt(-4, 4, true);
+        const c = randInt(-3, 3, true); const d = randInt(-4, 4, true);
+        const isSub = Math.random() < 0.5;
+        const op = isSub ? "-" : "+";
+
+        const num1 = formatLinear(a, b, "x");
+        const num2 = formatLinear(c, d, "x");
+        const questionHTML = `${makeFracHTML(num1, m)} ${op} ${makeFracHTML(num2, n)}`;
+
+        const L = lcm(m, n);
+        const mul1 = L / m;
+        const mul2 = L / n;
+
+        const totalX = isSub ? a * mul1 - c * mul2 : a * mul1 + c * mul2;
+        const totalConst = isSub ? b * mul1 - d * mul2 : b * mul1 + d * mul2;
+
+        if (totalX === 0 && totalConst === 0) return generateUnit2Problem(4);
+
+        const commonDiv = gcd(gcd(totalX, totalConst), L);
+        const finalX = totalX / commonDiv;
+        const finalConst = totalConst / commonDiv;
+        const finalDen = L / commonDiv;
+
+        const ansNumStr = formatLinear(finalX, finalConst, "x");
+        let answerHTML = "";
+        let answerRaw = "";
+
+        if (finalDen === 1) {
+          answerHTML = ansNumStr;
+          answerRaw = ansNumStr.replace(/\s+/g, "");
+        } else {
+          answerHTML = makeFracHTML(ansNumStr, finalDen);
+          const cleanNum = ansNumStr.replace(/\s+/g, "");
+          answerRaw = `(${cleanNum})/${finalDen}|${cleanNum}/${finalDen}`;
+        }
+
+        return {
+          questionHTML,
+          answerHTML,
+          answerRaw,
+          hint: `分母を ${L} に通分し、分子にはかっこをつけて計算します。※「分数モード」で分子と分母に分けて入力すると簡単です！`
+        };
+      } else {
+        // ステップ5：文字式の文章題（等式・不等式 9パターン完全ローテーション）
+        const pType = u2Step5Order[u2Step5Index % u2Step5Order.length];
+        u2Step5Index++;
+
+        if (pType === 0) {
+          // 1. おつり
+          const money = pick([500, 1000, 2000]);
+          const count = randInt(2, 6);
+          return {
+            questionHTML: `${money} 円を出して、1個 a 円の品物を ${count} 個買ったときのおつりは b 円であった。この数量の関係を等式で表しなさい。`,
+            answerHTML: `${money} - ${count}a = b`,
+            answerRaw: `${money}-${count}a=b|${money}-${count}*a=b|${count}a+b=${money}`,
+            hint: "（出したお金）－（代金）＝（おつり）の式を作ります。"
+          };
+        } else if (pType === 1) {
+          // 2. 道のり・速さ・時間
+          const speed = pick([4, 40, 60]);
+          return {
+            questionHTML: `x km の道のりを時速 ${speed} km で進むとかかる時間は y 時間である。この数量の関係を等式で表しなさい。`,
+            answerHTML: `${makeFracHTML("x", speed)} = y`,
+            answerRaw: `x/${speed}=y|${speed}y=x`,
+            hint: "（時間）＝（道のり）÷（速さ）を分数の形で表します。"
+          };
+        } else if (pType === 2) {
+          // 3. 代金と不等式
+          const count = randInt(3, 7);
+          const limit = pick([500, 800, 1000]);
+          return {
+            questionHTML: `1個 x 円のパンを ${count} 個買おうとしたが、持っていた ${limit} 円では買えなかった。この数量の関係を不等式で表しなさい。`,
+            answerHTML: `${count}x &gt; ${limit}`,
+            answerRaw: `${count}x>${limit}`,
+            hint: `パン ${count} 個の代金（${count}x 円）が、持っていた ${limit} 円より大きい（＞）という式にします。`
+          };
+        } else if (pType === 3) {
+          // 4. 割合（値引き）
+          const disc = pick([1, 2, 3]);
+          const rateNum = 10 - disc;
+          const decRate = (rateNum / 10).toFixed(1);
+          return {
+            questionHTML: `定価 x 円の品物を、定価の ${disc} 割引きで買ったときの代金は y 円であった。この数量の関係を等式で表しなさい。`,
+            answerHTML: `${decRate}x = y （または ${makeFracHTML(`${rateNum}x`, 10)} = y）`,
+            answerRaw: `${decRate}x=y|${rateNum}/10x=y|(${rateNum}x)/10=y|${rateNum}x/10=y`,
+            hint: `定価の ${disc} 割引きは、元の値段の ${decRate} 倍（1 - 0.${disc}）になります。`
+          };
+        } else if (pType === 4) {
+          // 5. わり算の商と余り
+          const div = randInt(3, 8);
+          const rem = randInt(1, div - 1);
+          return {
+            questionHTML: `ある整数 x を ${div} でわると、商が y で余りが ${rem} になる。この数量の関係を等式で表しなさい。`,
+            answerHTML: `x = ${div}y + ${rem}`,
+            answerRaw: `x=${div}y+${rem}|x-${rem}=${div}y`,
+            hint: "（わられる数）＝（わる数）×（商）＋（余り）の公式を使います。"
+          };
+        } else if (pType === 5) {
+          // 6. 単位変換
+          const isWeight = Math.random() < 0.5;
+          if (isWeight) {
+            return {
+              questionHTML: `重さ a kg と b g の合計は c g である。この数量の関係を等式で表しなさい。`,
+              answerHTML: `1000a + b = c`,
+              answerRaw: `1000a+b=c|b+1000a=c`,
+              hint: "1 kg ＝ 1000 g なので、a kg を 1000a g に直して単位をそろえます。"
+            };
+          } else {
+            return {
+              questionHTML: `道のり x km と y m の合計は L m である。この数量の関係を等式で表しなさい。`,
+              answerHTML: `1000x + y = L`,
+              answerRaw: `1000x+y=L|y+1000x=L`,
+              hint: "1 km ＝ 1000 m なので、x km を 1000x m に直して単位をそろえます。"
+            };
+          }
+        } else if (pType === 6) {
+          // 7. 重さの合計と不等式（以下・以上）
+          const wA = pick([100, 150, 200]);
+          const wB = pick([50, 80, 120]);
+          const totalW = pick([1000, 1500, 2000]);
+          const isOrLess = Math.random() < 0.5;
+          const symH = isOrLess ? "≦" : "≧";
+          const symR = isOrLess ? "<=" : ">=";
+          const word = isOrLess ? "以下" : "以上";
+          return {
+            questionHTML: `1個 ${wA} g の品物 x 個と、1個 ${wB} g の品物 y 個の重さの合計は ${totalW} g ${word}である。この数量の関係を不等式で表しなさい。`,
+            answerHTML: `${wA}x + ${wB}y ${symH} ${totalW}`,
+            answerRaw: `${wA}x+${wB}y${symR}${totalW}`,
+            hint: `「${word}」は不等号「${symH}」を使って表します。`
+          };
+        } else if (pType === 7) {
+          // 8. 2けたの自然数
+          return {
+            questionHTML: `十の位の数字が x 、一の位の数字が y である 2けたの自然数を M とする。この関係を等式で表しなさい。`,
+            answerHTML: `10x + y = M`,
+            answerRaw: `10x+y=M`,
+            hint: "十の位の数字 x は「10が x 個ある」という意味なので 10x と表します。"
+          };
+        } else {
+          // 9. 長方形の周の長さ
+          return {
+            questionHTML: `縦の長さが a cm、横の長さが b cm の長方形の周の長さは L cm である。この数量の関係を等式で表しなさい。`,
+            answerHTML: `2(a + b) = L （または 2a + 2b = L）`,
+            answerRaw: `2(a+b)=L|2a+2b=L`,
+            hint: "長方形の周の長さは、縦2本分＋横2本分なので 2(a + b) または 2a + 2b となります。"
           };
         }
       }
     }
 
     // ==========================================
-    // 単元3：一次方程式
+    // 単元3：一次方程式と比例式・文章題
     // ==========================================
     function generateUnit3Problem(step) {
       if (step === 1) {
-        const ansX = randInt(-8, 8);
-        const a = randInt(-8, 8, true);
+        // ステップ1：移項の基本（x + a = b または ax = b）
+        const ansX = randInt(-9, 9, true);
         const isMul = Math.random() < 0.5;
         if (!isMul) {
+          const a = randInt(-9, 9, true);
           const b = ansX + a;
           const lhs = formatLinear(1, a, "x");
-          return { questionHTML: `${lhs} = ${b}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}`, hint: "数字を右辺に移項します。" };
+          return {
+            questionHTML: `${lhs} = ${b}`,
+            answerHTML: `x = ${ansX}`,
+            answerRaw: `${ansX}|x=${ansX}`,
+            hint: `${a > 0 ? `+ ${a}` : `- ${Math.abs(a)}`} の符号を逆にして右辺へ移項します。`
+          };
         } else {
+          const a = pick([-8, -7, -6, -5, -4, -3, -2, 2, 3, 4, 5, 6, 7, 8]);
           const b = a * ansX;
-          return { questionHTML: `${a}x = ${b}`, answerHTML: `x = ${ansX}`, answerRaw: `${ansX}`, hint: "両辺を x の係数でわります。" };
+          const lhs = formatLinear(a, 0, "x");
+          return {
+            questionHTML: `${lhs} = ${b}`,
+            answerHTML: `x = ${ansX}`,
+            answerRaw: `${ansX}|x=${ansX}`,
+            hint: `両辺を x の係数である ${a} でわります。`
+          };
         }
       } else if (step === 2) {
-        const ansX = randInt(-6, 6);
-        const a = randInt(2, 6); const c = randInt(1, a - 1);
+        // 両辺に文字がある式 ax + b = cx + d
+        const ansX = randInt(-8, 8);
+        const a = randInt(-7, 7, true);
+        let c;
+        do { c = randInt(-7, 7, true); } while (c === a);
         const b = randInt(-9, 9);
         const d = a * ansX + b - c * ansX;
+        const lhs = formatLinear(a, b, "x");
+        const rhs = formatLinear(c, d, "x");
         return {
-          questionHTML: `${formatLinear(a,b,"x")} = ${formatLinear(c,d,"x")}`,
+          questionHTML: `${lhs} = ${rhs}`,
           answerHTML: `x = ${ansX}`,
-          answerRaw: `${ansX}`,
-          hint: "xの項を左辺に、数字を右辺に移項します。"
+          answerRaw: `${ansX}|x=${ansX}`,
+          hint: "文字の項は左辺へ、数の項は右辺へ移項してまとめます。"
         };
       } else if (step === 3) {
+        // かっこを含む式 k(x + a) = cx + d
         const ansX = randInt(-6, 6);
-        const k = pick([2, 3, -2, -3]);
-        const a = randInt(-5, 5);
-        const c = randInt(1, 4);
+        const k = pick([-4, -3, -2, 2, 3, 4]);
+        const a = randInt(-5, 5, true);
+        let c;
+        do { c = randInt(-5, 5, true); } while (c === k);
         const d = k * (ansX + a) - c * ansX;
         return {
-          questionHTML: `${k}(${formatLinear(1,a,"x")}) = ${formatLinear(c,d,"x")}`,
+          questionHTML: `${k}(${formatLinear(1, a, "x")}) = ${formatLinear(c, d, "x")}`,
           answerHTML: `x = ${ansX}`,
-          answerRaw: `${ansX}`,
-          hint: "まず分配法則でかっこを外してから移項します。"
+          answerRaw: `${ansX}|x=${ansX}`,
+          hint: "分配法則でかっこを外してから移項します。"
         };
       } else if (step === 4) {
+        // 小数・分数方程式
         const isDec = Math.random() < 0.5;
-        const ansX = randInt(-5, 5);
+        const ansX = randInt(-6, 6);
         if (isDec) {
           const a = randInt(1, 4); const b = randInt(1, 5);
           const rhs = (a * 0.1 * ansX + b * 0.1).toFixed(1);
@@ -1211,41 +1731,29 @@
             hint: "両辺を10倍して小数を整数に直します。"
           };
         } else {
-          const m = 3; const n = 2;
-          const k = randInt(1, 4);
+          const m = pick([2, 3, 4, 5]);
+          const k = randInt(-4, 4);
           const a = k * m - ansX;
           return {
             questionHTML: `${makeFracHTML(formatLinear(1, a, "x"), m)} = ${k}`,
             answerHTML: `x = ${ansX}`,
             answerRaw: `${ansX}`,
-            hint: "両辺に分母の数をかけて分母を払います。"
+            hint: `両辺に分母の ${m} をかけて分母を払います。`
           };
         }
       } else if (step === 5) {
         // 比例式
-        const isWord = Math.random() < 0.4;
-        if (isWord) {
-          const r1 = 2; const r2 = 3; const mult = randInt(20, 50);
-          const ans = r2 * mult;
-          return {
-            questionHTML: `砂糖と小麦粉の重さの比を ${r1} : ${r2} にします。砂糖を ${r1 * mult}g 使うとき、小麦粉は何 g 必要ですか。`,
-            answerHTML: `${ans} g`,
-            answerRaw: `${ans}`,
-            hint: "内項の積 ＝ 外項の積 を使って方程式を作ります。"
-          };
-        } else {
-          const a = randInt(2, 5); const b = randInt(3, 7);
-          const mult = randInt(2, 4);
-          const ansX = a * mult; const d = b * mult;
-          return {
-            questionHTML: `${a} : ${b} = x : ${d}`,
-            answerHTML: `x = ${ansX}`,
-            answerRaw: `${ansX}`,
-            hint: "「外側の積 ＝ 内側の積」で方程式を解きます。"
-          };
-        }
+        const a = randInt(2, 5); const b = randInt(3, 7);
+        const mult = randInt(2, 4);
+        const ansX = a * mult; const d = b * mult;
+        return {
+          questionHTML: `${a} : ${b} = x : ${d}`,
+          answerHTML: `x = ${ansX}`,
+          answerRaw: `${ansX}`,
+          hint: "「外側の積 ＝ 内側の積」で方程式を作って解きます。"
+        };
       } else {
-        // ステップ6：方程式文章題（全12パターンの完全巡回）
+        // ステップ6：方程式文章題（全12パターン完全巡回）
         const type = u3Step6Order[u3Step6Index % u3Step6Order.length];
         u3Step6Index++;
 
@@ -1351,8 +1859,6 @@
           const sA = 3000; const sB = 1000;
           const mA = 400; const mB = 200;
           const xMonths = randInt(3, 7);
-          const totalA = sA + mA * xMonths;
-          const totalB = sB + mB * xMonths;
           return {
             questionHTML: `A君は ${sA} 円、B君は ${sB} 円の貯金があります。来月から毎月、A君は ${mA} 円、B君は ${mB} 円ずつ貯金します。A君の貯金額がB君の貯金額のちょうど2倍になるのは何ヶ月後ですか。`,
             answerHTML: `${xMonths} ヶ月後`,
@@ -1398,47 +1904,62 @@
     }
 
     // ==========================================
-    // 問題の読み込み
+    // 問題の読み込みと正誤判定
     // ==========================================
     function loadProblem() {
       isAnswerChecked = false;
-      document.getElementById('feedbackArea').classList.remove('show');
-      document.getElementById('resultMark').className = 'result-mark';
+      updateProgressUI();
       document.getElementById('actionBtn').innerText = '判定';
+      document.getElementById('feedbackArea').classList.remove('show');
+      const mark = document.getElementById('resultMark');
+      mark.className = 'result-mark';
+
       clearAll();
 
-      if (currentUnit === 'unit1_seifu') currentProblem = generateUnit1Problem(currentStep);
-      else if (currentUnit === 'unit2_mojishiki') currentProblem = generateUnit2Problem(currentStep);
-      else currentProblem = generateUnit3Problem(currentStep);
+      if (currentUnit === 'unit1_seifu') {
+        currentProblem = generateUnit1Problem(currentStep);
+      } else if (currentUnit === 'unit2_mojishiki') {
+        currentProblem = generateUnit2Problem(currentStep);
+      } else {
+        currentProblem = generateUnit3Problem(currentStep);
+      }
 
       document.getElementById('questionDisplay').innerHTML = currentProblem.questionHTML;
       adaptKeypadVariables(currentProblem.answerRaw);
     }
 
-    // ==========================================
-    // 採点エンジン（超柔軟判定）
-    // ==========================================
-    function normalizeMathStr(s) {
-      if (!s) return "";
-      let res = s.replace(/[\s　]/g, "").toLowerCase();
-      res = res.replace(/≦/g, "<=").replace(/≧/g, ">=").replace(/×/g, "*").replace(/²/g, "2").replace(/\^/g, "");
-      res = res.replace(/[円人個本匹枚冊脚時間分秒gkm年後ヶ月後]/g, "");
-      return res;
+    // 入力文字列の正規化（空白・全角・二乗・不等号・不要なカッコの吸収）
+    function normalizeAns(str) {
+      if (!str) return "";
+      let s = str
+        .replace(/\s+/g, "")
+        .replace(/×/g, "*")
+        .replace(/÷/g, "/")
+        .replace(/²/g, "^2")
+        .replace(/≦/g, "<=")
+        .replace(/≧/g, ">=")
+        .replace(/＋/g, "+")
+        .replace(/－/g, "-")
+        .replace(/（/g, "(")
+        .replace(/）/g, ")");
+
+      // 単項だけのカッコを外す（例: (x)/5 -> x/5, (-3x)/2 -> -3x/2, (x+1)/5 はそのまま維持）
+      s = s.replace(/\(([+-]?[a-zA-Z0-9^]+)\)\//g, "$1/");
+      return s;
     }
 
-    function checkAnswer(user, rawConfig) {
-      const u = normalizeMathStr(user);
-      const targets = rawConfig.split('|').map(t => normalizeMathStr(t));
+    function checkAnswer(userStr, targetRaw) {
+      const u = normalizeAns(userStr);
+      const targets = targetRaw.split('|').map(t => normalizeAns(t));
 
-      if (targets.includes(u)) return true;
-
-      // 等式・不等式の反転チェック (例: y = 1000 - 3a と 1000 - 3a = y)
       for (let t of targets) {
+        if (u === t) return true;
+
+        // 等式や不等式の左右反転対応
         if (t.includes('=')) {
           const [l, r] = t.split('=');
           if (u === `${r}=${l}`) return true;
-        }
-        if (t.includes('>=')) {
+        } else if (t.includes('>=')) {
           const [l, r] = t.split('>=');
           if (u === `${r}<=${l}`) return true;
         } else if (t.includes('<=')) {
@@ -1457,7 +1978,12 @@
 
     function submitOrNext() {
       if (isAnswerChecked) {
-        loadProblem();
+        if (sessionQuestionIndex >= targetQuestionCount) {
+          showQuizResultModal();
+        } else {
+          sessionQuestionIndex++;
+          loadProblem();
+        }
         return;
       }
 
@@ -1474,7 +2000,10 @@
 
       const isCorrect = checkAnswer(userAns, currentProblem.answerRaw);
 
-      // 成績更新
+      // セッション得点＆累計成績更新
+      if (isCorrect) sessionCorrectCount++;
+      updateProgressUI();
+
       userStats[currentUnit].total++;
       if (isCorrect) userStats[currentUnit].correct++;
       localStorage.setItem('math_user_stats', JSON.stringify(userStats));
@@ -1491,10 +2020,34 @@
       }
 
       isAnswerChecked = true;
-      document.getElementById('actionBtn').innerText = '次へ ➜';
+      if (sessionQuestionIndex >= targetQuestionCount) {
+        document.getElementById('actionBtn').innerText = '結果を見る 🏆';
+      } else {
+        document.getElementById('actionBtn').innerText = '次へ ➜';
+      }
 
       // スプレッドシート自動同期
       syncToSpreadsheet(isCorrect);
+    }
+
+    function showQuizResultModal() {
+      const pointPerQ = 100 / targetQuestionCount;
+      const finalScore = Math.round(sessionCorrectCount * pointPerQ);
+      const conf = unitConfig[currentUnit];
+      const stepLabel = conf.labels[currentStep - 1] || `Step ${currentStep}`;
+
+      document.getElementById('resultUnitTitle').innerText = `${conf.title} 【${stepLabel}】`;
+      document.getElementById('finalScoreNum').innerText = finalScore;
+      document.getElementById('finalDetailText').innerText = `${targetQuestionCount}問中 ${sessionCorrectCount}問 正解！`;
+
+      let comment = "";
+      if (finalScore === 100) comment = "🎉 満点！完璧にマスターしましたね！素晴らしい！";
+      else if (finalScore >= 80) comment = "✨ 合格圏内！あと少しで満点です！";
+      else if (finalScore >= 60) comment = "👍 よく頑張りました！間違えた問題を復習してもう一度挑戦しよう！";
+      else comment = "💪 伸びしろたっぷり！解説を確認してもう1回チャレンジしよう！";
+
+      document.getElementById('finalCommentText').innerText = comment;
+      document.getElementById('quizResultModal').style.display = 'flex';
     }
 
     // ==========================================
@@ -1549,10 +2102,12 @@
       const conf = unitConfig[currentUnit];
       const stepLabel = conf.labels[currentStep - 1] || `Step ${currentStep}`;
       const title = `${conf.title} 【${stepLabel}】`;
+      const qCount = targetQuestionCount; // 10問 または 20問に連動
+      const pointPerQ = 100 / qCount;
 
-      // 20問の問題・正解を生成（タブで選択されている単元・ステップから生成）
+      // 選択された問題数（10問または20問）を生成
       const problems = [];
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < qCount; i++) {
         let prob;
         if (currentUnit === 'unit1_seifu') prob = generateUnit1Problem(currentStep);
         else if (currentUnit === 'unit2_mojishiki') prob = generateUnit2Problem(currentStep);
@@ -1560,9 +2115,9 @@
         problems.push(prob);
       }
 
-      // 前半10問 (1〜10)
+      // 1ページ目：前半10問 (1〜10)
       let questionsP1 = '';
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < Math.min(10, qCount); i++) {
         const p = problems[i];
         questionsP1 += `
           <div class="print-item">
@@ -1572,19 +2127,35 @@
         `;
       }
 
-      // 後半10問 (11〜20)
-      let questionsP2 = '';
-      for (let i = 10; i < 20; i++) {
-        const p = problems[i];
-        questionsP2 += `
-          <div class="print-item">
-            <div class="print-item-q">(${i + 1}) ${p.questionHTML}</div>
-            <div class="print-ans-line"><span>答:</span><div class="print-line"></div></div>
+      // 2ページ目（20問選択時のみ）：後半10問 (11〜20)
+      let page2HTML = '';
+      if (qCount === 20) {
+        let questionsP2 = '';
+        for (let i = 10; i < 20; i++) {
+          const p = problems[i];
+          questionsP2 += `
+            <div class="print-item">
+              <div class="print-item-q">(${i + 1}) ${p.questionHTML}</div>
+              <div class="print-ans-line"><span>答:</span><div class="print-line"></div></div>
+            </div>
+          `;
+        }
+        page2HTML = `
+          <div class="print-page print-page-break">
+            <div class="print-header">
+              <div class="print-title">${title} 確認プリント (2/2)</div>
+              <div class="print-info">
+                <span>氏名: ________________________</span>
+              </div>
+            </div>
+            <div class="print-grid">
+              ${questionsP2}
+            </div>
           </div>
         `;
       }
 
-      // 模範解答 (全20問)
+      // 模範解答
       let answersHTML = '';
       problems.forEach((p, idx) => {
         answersHTML += `
@@ -1594,11 +2165,13 @@
         `;
       });
 
+      const page1TitleSuffix = qCount === 20 ? " (1/2)" : "";
+
       printContainer.innerHTML = `
         <!-- 1ページ目：問題 (1)〜(10) -->
         <div class="print-page print-page-break">
           <div class="print-header">
-            <div class="print-title">${title} 確認プリント (1/2)</div>
+            <div class="print-title">${title} 確認プリント${page1TitleSuffix}</div>
             <div class="print-info">
               <span>組・番: ____________</span>
               <span>氏名: ________________________</span>
@@ -1610,25 +2183,14 @@
           </div>
         </div>
 
-        <!-- 2ページ目：問題 (11)〜(20) -->
-        <div class="print-page print-page-break">
-          <div class="print-header">
-            <div class="print-title">${title} 確認プリント (2/2)</div>
-            <div class="print-info">
-              <span>氏名: ________________________</span>
-            </div>
-          </div>
-          <div class="print-grid">
-            ${questionsP2}
-          </div>
-        </div>
+        ${page2HTML}
 
-        <!-- 3ページ目：模範解答 (1)〜(20) -->
+        <!-- 最終ページ：模範解答 -->
         <div class="print-page">
           <div class="print-header">
             <div class="print-title">${title} 【模範解答】</div>
             <div class="print-info">
-              <span>配点: 各5点 (全20問・100点満点)</span>
+              <span>配点: 各${pointPerQ}点 (全${qCount}問・100点満点)</span>
             </div>
           </div>
           <div class="answer-grid">
